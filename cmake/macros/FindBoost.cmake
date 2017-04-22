@@ -383,24 +383,28 @@ function(_Boost_GUESS_COMPILER_PREFIX _ret)
     else()
       set (_boost_COMPILER "-il")
     endif()
-  elseif (MSVC14)
-    set(_boost_COMPILER "-vc140")
-  elseif (MSVC12)
-    set(_boost_COMPILER "-vc120")
-  elseif (MSVC11)
-    set(_boost_COMPILER "-vc110")
-  elseif (MSVC10)
-    set(_boost_COMPILER "-vc100")
-  elseif (MSVC90)
-    set(_boost_COMPILER "-vc90")
-  elseif (MSVC80)
-    set(_boost_COMPILER "-vc80")
-  elseif (MSVC71)
-    set(_boost_COMPILER "-vc71")
-  elseif (MSVC70) # Good luck!
-    set(_boost_COMPILER "-vc7") # yes, this is correct
-  elseif (MSVC60) # Good luck!
-    set(_boost_COMPILER "-vc6") # yes, this is correct
+  elseif("x${CMAKE_CXX_COMPILER_ID}" STREQUAL "xMSVC")
+    if (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.10)
+      set(_boost_COMPILER "-vc141;-vc140")
+    elseif (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19)
+      set(_boost_COMPILER "-vc140")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 18)
+      set(_boost_COMPILER "-vc120")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 17)
+      set(_boost_COMPILER "-vc110")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
+      set(_boost_COMPILER "-vc100")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15)
+      set(_boost_COMPILER "-vc90")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+      set(_boost_COMPILER "-vc80")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13.10)
+      set(_boost_COMPILER "-vc71")
+    elseif(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13) # Good luck!
+      set(_boost_COMPILER "-vc7") # yes, this is correct
+    else() # VS 6.0 Good luck!
+      set(_boost_COMPILER "-vc6") # yes, this is correct
+    endif()
   elseif (BORLAND)
     set(_boost_COMPILER "-bcb")
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "SunPro")
@@ -983,19 +987,26 @@ foreach(COMPONENT ${Boost_FIND_COMPONENTS})
   #
   # Find RELEASE libraries
   #
-  set(_boost_RELEASE_NAMES
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}-${Boost_LIB_VERSION}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}-${Boost_LIB_VERSION}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT} )
+  unset(_boost_RELEASE_NAMES)
+  foreach(compiler IN LISTS _boost_COMPILER)
+    list(APPEND _boost_RELEASE_NAMES
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}-${Boost_LIB_VERSION}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG} )
+  endforeach()
+    list(APPEND _boost_RELEASE_NAMES
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}-${Boost_LIB_VERSION}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_ABI_TAG}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT} )
   if(_boost_STATIC_RUNTIME_WORKAROUND)
     set(_boost_RELEASE_STATIC_ABI_TAG "-s${_boost_RELEASE_ABI_TAG}")
-    list(APPEND _boost_RELEASE_NAMES
-      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
-      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG}
-      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
-      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG} )
+    foreach(compiler IN LISTS _boost_COMPILER)
+      list(APPEND _boost_RELEASE_NAMES
+        ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
+        ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG} )
+    endforeach()
+      list( APPEND _boost_RELEASE_NAMES
+        ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
+        ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_RELEASE_STATIC_ABI_TAG} )
   endif()
   if(Boost_THREADAPI AND ${COMPONENT} STREQUAL "thread")
      _Boost_PREPEND_LIST_WITH_THREADAPI(_boost_RELEASE_NAMES ${_boost_RELEASE_NAMES})
@@ -1018,18 +1029,25 @@ foreach(COMPONENT ${Boost_FIND_COMPONENTS})
   #
   # Find DEBUG libraries
   #
-  set(_boost_DEBUG_NAMES
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}-${Boost_LIB_VERSION}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}-${Boost_LIB_VERSION}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}
-    ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT} )
+  unset(_boost_DEBUG_NAMES)
+  foreach(compiler IN LISTS _boost_COMPILER)
+    list(APPEND _boost_DEBUG_NAMES
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}-${Boost_LIB_VERSION}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG} )
+  endforeach()
+    list(APPEND
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}-${Boost_LIB_VERSION}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_DEBUG_ABI_TAG}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}
+      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT} )
   if(_boost_STATIC_RUNTIME_WORKAROUND)
     set(_boost_DEBUG_STATIC_ABI_TAG "-s${_boost_DEBUG_ABI_TAG}")
+    foreach(compiler IN LISTS _boost_COMPILER)
+      list(APPEND _boost_DEBUG_NAMES
+        ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_DEBUG_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
+        ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${compiler}${_boost_MULTITHREADED}${_boost_DEBUG_STATIC_ABI_TAG} )
+    endforeach()
     list(APPEND _boost_DEBUG_NAMES
-      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_DEBUG_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
-      ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_COMPILER}${_boost_MULTITHREADED}${_boost_DEBUG_STATIC_ABI_TAG}
       ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_DEBUG_STATIC_ABI_TAG}-${Boost_LIB_VERSION}
       ${Boost_LIB_PREFIX}${Boost_NAMESPACE}_${COMPONENT}${_boost_MULTITHREADED}${_boost_DEBUG_STATIC_ABI_TAG} )
   endif()
