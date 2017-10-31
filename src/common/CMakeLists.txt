@@ -62,6 +62,7 @@ target_include_directories(common
 
 target_link_libraries(common
   PUBLIC
+    trinity-core-interface
     boost
     fmt
     g3dlib

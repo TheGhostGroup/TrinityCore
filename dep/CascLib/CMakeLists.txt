@@ -52,6 +52,8 @@ target_include_directories(casc
     PRIVATE
       ${CMAKE_SOURCE_DIR}/dep)
 
+  PRIVATE
+    trinity-dependency-interface
 set_target_properties(casc
   PROPERTIES
     FOLDER
