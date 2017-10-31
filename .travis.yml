@@ -8,6 +8,9 @@ compiler:
 git:
   depth: 1
 
+    sources:
+      - ubuntu-toolchain-r-test
+      - g++-6
 before_install:
   - wget -O - http://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
   - echo "yes" | sudo add-apt-repository 'deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-3.9 main'
