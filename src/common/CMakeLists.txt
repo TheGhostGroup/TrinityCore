@@ -25,7 +25,6 @@ list(APPEND PRIVATE_SOURCES
 
 if (USE_COREPCH)
   set(PRIVATE_PCH_HEADER PrecompiledHeaders/commonPCH.h)
-  set(PRIVATE_PCH_SOURCE PrecompiledHeaders/commonPCH.cpp)
 endif (USE_COREPCH)
 
 GroupSources(${CMAKE_CURRENT_SOURCE_DIR})
@@ -97,5 +96,5 @@ endif()
 
 # Generate precompiled header
 if (USE_COREPCH)
-  add_cxx_pch(common ${PRIVATE_PCH_HEADER} ${PRIVATE_PCH_SOURCE})
+  add_cxx_pch(common ${PRIVATE_PCH_HEADER})
 endif ()

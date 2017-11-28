@@ -16,7 +16,6 @@ CollectSourceFiles(
 
 if (USE_COREPCH)
   set(PRIVATE_PCH_HEADER PrecompiledHeaders/databasePCH.h)
-  set(PRIVATE_PCH_SOURCE PrecompiledHeaders/databasePCH.cpp)
 endif()
 
 GroupSources(${CMAKE_CURRENT_SOURCE_DIR})
@@ -73,5 +72,5 @@ endif()
 
 # Generate precompiled header
 if (USE_COREPCH)
-  add_cxx_pch(database ${PRIVATE_PCH_HEADER} ${PRIVATE_PCH_SOURCE})
+  add_cxx_pch(database ${PRIVATE_PCH_HEADER})
 endif ()

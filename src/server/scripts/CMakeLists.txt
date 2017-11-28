@@ -91,7 +91,6 @@ endforeach()
 # Base sources which are used by every script project
 if (USE_SCRIPTPCH)
   set(PRIVATE_PCH_HEADER ScriptPCH.h)
-  set(PRIVATE_PCH_SOURCE ScriptPCH.cpp)
 endif ()
 
 GroupSources(${CMAKE_CURRENT_SOURCE_DIR})
