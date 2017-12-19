@@ -60,8 +60,8 @@ target_include_directories(common
     ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(common
-  PUBLIC
     trinity-core-interface
+  PUBLIC
     boost
     fmt
     g3dlib

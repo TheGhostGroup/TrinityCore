@@ -33,6 +33,8 @@ if (MSVC)
 endif ()
 
 target_link_libraries(connection_patcher
+  PRIVATE
+    trinity-core-interface
   PUBLIC
     common
 )

@@ -12,9 +12,12 @@
 add_executable(vmap4assembler VMapAssembler.cpp)
 
 target_link_libraries(vmap4assembler
-  common
-  casc
-  zlib)
+  PRIVATE
+    trinity-core-interface
+  PUBLIC
+    common
+    casc
+    zlib)
 
 set_target_properties(vmap4assembler
     PROPERTIES
