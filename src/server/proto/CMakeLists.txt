@@ -8,14 +8,6 @@
 # WITHOUT ANY WARRANTY, to the extent permitted by law; without even the
 # implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  string(REGEX REPLACE "/W[0-4] " "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-  string(REGEX REPLACE "/W[0-4] " "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
-  add_definitions(/W0)
-else()
-  add_definitions(-w)
-endif()
-
 CollectSourceFiles(
   ${CMAKE_CURRENT_SOURCE_DIR}
   PRIVATE_SOURCES
@@ -48,9 +40,18 @@ target_include_directories(proto
     ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(proto
+  PRIVATE
+    trinity-default-interface
+    trinity-no-warning-interface
   PUBLIC
     common
     protobuf)
+
+if (MSVC)
+  target_compile_definitions(protobuf
+    PRIVATE
+      -D_SCL_SECURE_NO_WARNINGS)
+endif()
 
 set_target_properties(proto
   PROPERTIES
