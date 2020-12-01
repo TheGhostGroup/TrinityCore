@@ -526,6 +526,8 @@ void ObjectMgr::LoadCreatureTemplate(Field* fields)
 void ObjectMgr::LoadCreatureTemplateAddons()
 {
     uint32 oldMSTime = getMSTime();
+    
+    _creatureTemplateAddonStore.clear(); // needed for reload
 
     //                                                 0       1       2      3       4       5        6             7              8                  9              10
     QueryResult result = WorldDatabase.Query("SELECT entry, path_id, mount, bytes1, bytes2, emote, aiAnimKit, movementAnimKit, meleeAnimKit, visibilityDistanceType, auras FROM creature_template_addon");
