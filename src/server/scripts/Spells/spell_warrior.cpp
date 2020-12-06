@@ -59,6 +59,11 @@ enum WarriorSpells
     SPELL_WARRIOR_RALLYING_CRY                      = 97463,
     SPELL_WARRIOR_REND                              = 94009,
     SPELL_WARRIOR_RETALIATION_DAMAGE                = 22858,
+    SPELL_WARRIOR_RAVAGER                           = 152277,
+    SPELL_WARRIOR_RAVAGER_DAMAGE                    = 156287,
+    SPELL_WARRIOR_RAVAGER_ENERGIZE                  = 248439,
+    SPELL_WARRIOR_RAVAGER_PARRY                     = 227744,
+    SPELL_WARRIOR_RAVAGER_SUMMON                    = 227876,
     SPELL_WARRIOR_SECOUND_WIND_PROC_RANK_1          = 29834,
     SPELL_WARRIOR_SECOUND_WIND_PROC_RANK_2          = 29838,
     SPELL_WARRIOR_SECOUND_WIND_TRIGGER_RANK_1       = 29841,
@@ -83,6 +88,8 @@ enum WarriorSpells
     SPELL_WARRIOR_JUMP_TO_SKYHOLD_JUMP              = 192085,
     SPELL_WARRIOR_JUMP_TO_SKYHOLD_TELEPORT          = 216016,
     SPELL_WARRIOR_JUMP_TO_SKYHOLD_AURA              = 215997,
+    
+    NPC_WARRIOR_RAVAGER                             = 76168,
 };
 
 enum WarriorMisc
@@ -1480,6 +1487,73 @@ class spell_warr_vigilance_trigger : public SpellScriptLoader
         }
 };
 
+// Ravager - 152277
+// Ravager - 228920
+class spell_warr_ravager : public SpellScript
+{
+    PrepareSpellScript(spell_warr_ravager);
+
+    void HandleOnHit(SpellEffIndex /* effIndex */)
+    {
+        if (WorldLocation const* dest = GetExplTargetDest())
+            GetCaster()->CastSpell(dest->GetPosition(), SPELL_WARRIOR_RAVAGER_SUMMON, true);
+    }
+
+    void Register() override
+    {
+        OnEffectHit += SpellEffectFn(spell_warr_ravager::HandleOnHit, EFFECT_1, SPELL_EFFECT_DUMMY);
+    }
+};
+
+// Ravager - 152277
+// Ravager - 228920
+class aura_warr_ravager : public AuraScript
+{
+    PrepareAuraScript(aura_warr_ravager);
+
+    void OnApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Player* player = GetTarget()->ToPlayer())
+            if (player->GetSpecializationId() == TALENT_SPEC_WARRIOR_PROTECTION)
+                player->CastSpell(player, SPELL_WARRIOR_RAVAGER_PARRY, true);
+    }
+
+    void OnTick(AuraEffect const* /*aurEff*/)
+    {
+        if (Creature* creature = GetTarget()->GetSummonedCreatureByEntry(NPC_WARRIOR_RAVAGER))
+            GetTarget()->CastSpell(creature->GetPosition(), SPELL_WARRIOR_RAVAGER_DAMAGE, true);
+    }
+
+    void Register() override
+    {
+        OnEffectApply += AuraEffectApplyFn(aura_warr_ravager::OnApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL_OR_REAPPLY_MASK);
+        OnEffectPeriodic += AuraEffectPeriodicFn(aura_warr_ravager::OnTick, EFFECT_2, SPELL_AURA_PERIODIC_DUMMY);
+    }
+};
+
+// Ravager Damage - 156287
+class spell_warr_ravager_damage : public SpellScript
+{
+    PrepareSpellScript(spell_warr_ravager_damage);
+
+    void HandleOnHitTarget(SpellEffIndex /*effIndex*/)
+    {
+        if (!_alreadyProc)
+        {
+            GetCaster()->CastSpell(GetCaster(), SPELL_WARRIOR_RAVAGER_ENERGIZE, true);
+            _alreadyProc = true;
+        }
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_warr_ravager_damage::HandleOnHitTarget, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+    }
+
+private:
+    bool _alreadyProc = false;
+};
+
 void AddSC_warrior_spell_scripts()
 {
     new spell_warr_bloodthirst();
@@ -1517,4 +1591,7 @@ void AddSC_warrior_spell_scripts()
     new spell_warr_vigilance();
     new spell_warr_vigilance_trigger();
     new spell_warr_jump_to_skyhold();
+    RegisterSpellAndAuraScriptPair(spell_warr_ravager, aura_warr_ravager);
+    RegisterSpellScript(spell_warr_ravager_damage);
+    RegisterCreatureAI(npc_warr_ravager);
 }
