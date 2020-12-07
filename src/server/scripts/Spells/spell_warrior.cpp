@@ -32,6 +32,7 @@
 #include "PathGenerator.h"
 #include "Player.h"
 #include "Unit.h"
+#include "Spell.h"
 #include "ScriptMgr.h"
 #include "SpellHistory.h"
 #include "SpellScript.h"
