@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2020 Legacy Project <https://github.com/LegacyProject/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -21,15 +22,20 @@
  * Scriptnames of files in this file should be prefixed with "spell_warr_".
  */
 
-#include "ScriptMgr.h"
+
+#include "Creature.h"
+#include "Item.h"
 #include "Map.h"
-#include "MoveSpline.h"
+#include "MotionMaster.h"
+#include "ObjectAccessor.h"
 #include "PathGenerator.h"
 #include "Player.h"
-#include "SpellMgr.h"
-#include "SpellAuraEffects.h"
+#include "Unit.h"
+#include "ScriptMgr.h"
 #include "SpellHistory.h"
 #include "SpellScript.h"
+#include "SpellAuraEffects.h"
+#include "SpellMgr.h"
 
 enum WarriorSpells
 {
