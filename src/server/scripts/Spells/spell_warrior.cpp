@@ -26,6 +26,7 @@
 #include "Creature.h"
 #include "Item.h"
 #include "Map.h"
+#include "MoveSpline.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "PathGenerator.h"
