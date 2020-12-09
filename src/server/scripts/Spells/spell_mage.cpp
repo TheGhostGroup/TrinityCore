@@ -767,4 +767,4 @@ void AddSC_mage_spell_scripts()
     RegisterSpellScript(spell_mage_water_elemental_freeze);
     RegisterSpellScript(spell_mage_finger_of_frost);
 }
-}
+
