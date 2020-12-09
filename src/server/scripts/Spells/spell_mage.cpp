@@ -742,7 +742,7 @@ class spell_mage_finger_of_frost : public SpellScript
     {
         AfterCast += SpellCastFn(spell_mage_finger_of_frost::HandleAfterCast);
     }
-}
+};
 
 void AddSC_mage_spell_scripts()
 {
