@@ -1014,6 +1014,9 @@ public:
 
 void AddSC_orderhall_warrior()
 {
+    RegisterSpellScript(spell_class_hall_warrior_jump_exit);
+    RegisterSpellScript(spell_class_hall_warrior_jump_teleport);
+    RegisterCreatureAI(npc_class_hall_warrior_aerylia);
     RegisterCreatureAI(npc_danica_the_reclaimer);
     RegisterCreatureAI(npc_feasting_valarjar);
     RegisterCreatureAI(npc_incoming_valarjar_aspirant_1);
