@@ -18,8 +18,8 @@
 #ifndef LoginRESTService_h__
 #define LoginRESTService_h__
 
-#include "Session.h"
 #include "Define.h"
+#include "Session.h"
 #include "Login.pb.h"
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -29,17 +29,24 @@
 #include <mutex>
 #include <thread>
 
+class AsyncLoginRequest;
 struct soap;
 struct soap_plugin;
+
+enum class BanMode
+{
+    BAN_IP = 0,
+    BAN_ACCOUNT = 1
+};
 
 class LoginRESTService
 {
 public:
-    LoginRESTService() : _stopped(false), _port(0), _loginTicketCleanupTimer(nullptr) { }
+    LoginRESTService() : _ioService(nullptr), _stopped(false), _port(0), _loginTicketCleanupTimer(nullptr) { }
 
     static LoginRESTService& Instance();
 
-    bool Start(boost::asio::io_service& ioService);
+    bool Start(boost::asio::io_service* ioService);
     void Stop();
 
     boost::asio::ip::tcp::endpoint const& GetAddressForClient(boost::asio::ip::address const& address) const;
@@ -56,6 +63,8 @@ private:
     int32 HandlePost(soap* soapClient);
 
     int32 SendResponse(soap* soapClient, google::protobuf::Message const& response);
+
+    void HandleAsyncRequest(std::shared_ptr<AsyncLoginRequest> request);
 
     std::string CalculateShaPassHash(std::string const& name, std::string const& password);
 
@@ -93,6 +102,7 @@ private:
         char const* ContentType;
     };
 
+    boost::asio::io_service* _ioService;
     std::thread _thread;
     std::atomic<bool> _stopped;
     Battlenet::JSON::Login::FormInputs _formInputs;

@@ -15,7 +15,13 @@ if(WIN32)
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.0)
       set(BOOST_LIBRARYDIR ${BOOST_ROOT}/lib${PLATFORM}-msvc-12.0)
     else()
-      set(BOOST_LIBRARYDIR ${BOOST_ROOT}/lib${PLATFORM}-msvc-14.0)
+      if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.10)
+        set(BOOST_LIBRARYDIR ${BOOST_ROOT}/lib${PLATFORM}-msvc-14.0)
+      else()
+        list(APPEND BOOST_LIBRARYDIR
+          ${BOOST_ROOT}/lib${PLATFORM}-msvc-14.1
+          ${BOOST_ROOT}/lib${PLATFORM}-msvc-14.0 )
+      endif()
     endif()
   else()
     message(FATAL_ERROR "No BOOST_ROOT environment variable could be found! Please make sure it is set and the points to your Boost installation.")
@@ -26,7 +32,7 @@ if(WIN32)
   set(Boost_USE_STATIC_RUNTIME     OFF)
 endif()
 
-find_package(Boost 1.55 REQUIRED system filesystem thread program_options iostreams regex)
+find_package(Boost 1.55 REQUIRED system filesystem thread program_options iostreams)
 
 # Find if Boost was compiled in C++03 mode because it requires -DBOOST_NO_CXX11_SCOPED_ENUMS
 
