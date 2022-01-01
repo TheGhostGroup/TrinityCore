@@ -3439,6 +3439,15 @@ void SpellMgr::LoadSpellInfoCorrections()
                 spellEffectInfo->ApplyAuraName = SPELL_AURA_PERIODIC_TRIGGER_SPELL;
             });
         });
+
+        // Lich Pet
+        ApplySpellFix({ 70050 }, [](SpellInfo* spellInfo)
+        {
+            ApplySpellEffectFix(spellInfo, EFFECT_0, [](SpellEffectInfo* spellEffectInfo)
+            {
+                spellEffectInfo->TriggerSpell = 70049;
+            });
+        });
     }
 
     // Allows those to crit
@@ -3586,7 +3595,8 @@ void SpellMgr::LoadSpellInfoCorrections()
         58552, // Return to Orgrimmar
         58533, // Return to Stormwind
         21855, // Challenge Flag
-        51122  // Fierce Lightning Stike
+        51122, // Fierce Lightning Stike
+        71848  // Toxic Wasteling Find Target
     }, [](SpellInfo* spellInfo)
     {
         spellInfo->MaxAffectedTargets = 1;
@@ -3982,6 +3992,12 @@ void SpellMgr::LoadSpellInfoCorrections()
     ApplySpellFix({ 53525 }, [](SpellInfo* spellInfo)
     {
         spellInfo->DurationEntry = sSpellDurationStore.LookupEntry(4); // 2 minutes
+    });
+
+    // Dark Conclave Ritualist Channel
+    ApplySpellFix({ 38469 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->RangeEntry = sSpellRangeStore.LookupEntry(6);  // 100yd
     });
 
     //
