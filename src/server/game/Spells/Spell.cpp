@@ -1422,21 +1422,7 @@ void Spell::SelectImplicitCasterDestTargets(SpellEffectInfo const& spellEffectIn
             Position pos = dest._position;
 
             unitCaster->MovePositionToFirstCollision(pos, dist, angle);
-            // Generate path to that point.
-            if (!m_preGeneratedPath)
-                m_preGeneratedPath = std::make_unique<PathGenerator>(unitCaster);
-
-            m_preGeneratedPath->SetPathLengthLimit(dist);
-
-            // Should we use straightline here ? What do we do when we don't have a full path ?
-            bool pathResult = m_preGeneratedPath->CalculatePath(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), false, true);
-            if (pathResult && m_preGeneratedPath->GetPathType() & (PATHFIND_NORMAL | PATHFIND_SHORTCUT))
-            {
-                pos.m_positionX = m_preGeneratedPath->GetActualEndPosition().x;
-                pos.m_positionY = m_preGeneratedPath->GetActualEndPosition().y;
-                pos.m_positionZ = m_preGeneratedPath->GetActualEndPosition().z;
-                dest.Relocate(pos);
-            }
+            dest.Relocate(pos);
             break;
         }
         case TARGET_DEST_CASTER_GROUND:
@@ -2642,10 +2628,6 @@ void Spell::TargetInfo::DoDamageAndTriggers(Spell* spell)
             {
                 spellDamageInfo = std::make_unique<DamageInfo>(damageInfo, SPELL_DIRECT_DAMAGE, spell->m_attackType, hitMask);
                 procSpellType |= PROC_SPELL_TYPE_DAMAGE;
-
-                if (caster->GetTypeId() == TYPEID_PLAYER && !spell->m_spellInfo->HasAttribute(SPELL_ATTR0_STOP_ATTACK_TARGET) && !spell->m_spellInfo->HasAttribute(SPELL_ATTR4_SUPPRESS_WEAPON_PROCS) &&
-                    (spell->m_spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MELEE || spell->m_spellInfo->DmgClass == SPELL_DAMAGE_CLASS_RANGED))
-                    caster->ToPlayer()->CastItemCombatSpell(*spellDamageInfo);
             }
         }
 
@@ -5757,7 +5739,7 @@ SpellCastResult Spell::CheckCast(bool strict, int32* param1 /*= nullptr*/, int32
                     m_preGeneratedPath->SetPathLengthLimit(range);
 
                     // first try with raycast, if it fails fall back to normal path
-                    bool result = m_preGeneratedPath->CalculatePath(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), false, false);
+                    bool result = m_preGeneratedPath->CalculatePath(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ(), false);
                     if (m_preGeneratedPath->GetPathType() & PATHFIND_SHORT)
                         return SPELL_FAILED_NOPATH;
                     else if (!result || m_preGeneratedPath->GetPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE))
@@ -7529,7 +7511,7 @@ bool Spell::CheckEffectTarget(Unit const* target, SpellEffectInfo const& spellEf
         case SPELL_AURA_MOD_CHARM:
         case SPELL_AURA_MOD_POSSESS_PET:
         case SPELL_AURA_AOE_CHARM:
-            if (target->GetTypeId() == TYPEID_UNIT && target->IsVehicle())
+            if (target->GetVehicleKit() && target->GetVehicleKit()->IsControllableVehicle())
                 return false;
             if (target->IsMounted())
                 return false;
@@ -8613,6 +8595,75 @@ bool WorldObjectSpellLineTargetCheck::operator()(WorldObject* target) const
     return WorldObjectSpellTargetCheck::operator ()(target);
 }
 
+void SelectRandomInjuredTargets(std::list<WorldObject*>& targets, size_t maxTargets, bool prioritizePlayers)
+{
+    if (targets.size() <= maxTargets)
+        return;
+
+    std::vector<WorldObject*> tempTargets(targets.begin(), targets.end());
+
+    auto begin = tempTargets.begin();
+    auto end = tempTargets.end();
+
+    if (prioritizePlayers)
+    {
+        auto playersEnd = std::stable_partition(begin, end, [](WorldObject const* target)
+        {
+            return target->IsPlayer();
+        });
+
+        size_t playerCount = std::distance(begin, playersEnd);
+        if (playerCount < maxTargets)
+        {
+            // not enough players, add nonplayer targets
+            // prioritize injured nonplayers over full health nonplayers
+            auto injuredNonPlayersEnd = std::stable_partition(playersEnd, end, [](WorldObject const* target)
+            {
+                return target->IsUnit() && !target->ToUnit()->IsFullHealth();
+            });
+
+            size_t injuredNonPlayersCount = std::distance(playersEnd, injuredNonPlayersEnd);
+            if (playerCount + injuredNonPlayersCount < maxTargets)
+            {
+                // not enough players + injured nonplayers
+                // fill remainder with random full health nonplayers
+                Containers::RandomShuffle(injuredNonPlayersEnd, end);
+            }
+            else if (playerCount + injuredNonPlayersCount > maxTargets)
+            {
+                // randomize injured nonplayers order
+                // final list will contain all players + random injured nonplayers
+                Containers::RandomShuffle(playersEnd, injuredNonPlayersEnd);
+            }
+
+            targets.assign(tempTargets.begin(), tempTargets.begin() + maxTargets);
+            return;
+        }
+
+        // We have more players than we requested, proceed checking injured targets
+        end = playersEnd;
+    }
+
+    auto injuredUnitsEnd = std::stable_partition(begin, end, [](WorldObject const* target)
+    {
+        return target->IsUnit() && !target->ToUnit()->IsFullHealth();
+    });
+
+    size_t injuredUnitsCount = std::distance(begin, injuredUnitsEnd);
+    if (injuredUnitsCount < maxTargets)
+    {
+        // not enough injured units
+        // fill remainder with full health units
+        Containers::RandomShuffle(injuredUnitsEnd, end);
+    }
+    else if (injuredUnitsCount > maxTargets)
+    {
+        // select random injured units
+        Containers::RandomShuffle(begin, injuredUnitsEnd);
+    }
+
+    targets.assign(tempTargets.begin(), tempTargets.begin() + maxTargets);
+}
 } //namespace Trinity
 
 CastSpellTargetArg::CastSpellTargetArg(WorldObject* target)
