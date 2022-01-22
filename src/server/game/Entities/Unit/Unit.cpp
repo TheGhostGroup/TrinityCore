@@ -3064,14 +3064,6 @@ Aura* Unit::_TryStackingOrRefreshingExistingAura(AuraCreateInfo& createInfo)
     if (!createInfo.CasterGUID && !createInfo.GetSpellInfo()->IsStackableOnOneSlotWithDifferentCasters())
         createInfo.CasterGUID = createInfo.Caster->GetGUID();
 
-    // world gameobjects can't own auras and they send empty casterguid
-    // checked on sniffs with spell 22247
-    if (createInfo.CasterGUID.IsGameObject())
-    {
-        createInfo.Caster = nullptr;
-        createInfo.CasterGUID.Clear();
-    }
-
     // passive and Incanter's Absorption and auras with different type can stack with themselves any number of times
     if (!createInfo.GetSpellInfo()->IsMultiSlotAura())
     {
@@ -5883,7 +5875,7 @@ void Unit::SetMinion(Minion *minion, bool apply)
                 minion->SetSpeedRate(UnitMoveType(i), m_speed_rate[i]);
 
         // Send infinity cooldown - client does that automatically but after relog cooldown needs to be set again
-        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(minion->m_unitData->CreatedBySpell, GetMap()->GetDifficultyID());
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(minion->m_unitData->CreatedBySpell, DIFFICULTY_NONE);
 
         if (spellInfo && (spellInfo->IsCooldownStartedOnEvent()))
             GetSpellHistory()->StartCooldown(spellInfo, 0, nullptr, true);
@@ -5910,7 +5902,7 @@ void Unit::SetMinion(Minion *minion, bool apply)
         else if (minion->IsTotem())
         {
             // All summoned by totem minions must disappear when it is removed.
-            if (SpellInfo const* spInfo = sSpellMgr->GetSpellInfo(minion->ToTotem()->GetSpell(), GetMap()->GetDifficultyID()))
+            if (SpellInfo const* spInfo = sSpellMgr->GetSpellInfo(minion->ToTotem()->GetSpell(), DIFFICULTY_NONE))
             {
                 for (SpellEffectInfo const& spellEffectInfo : spInfo->GetEffects())
                 {
@@ -5922,7 +5914,7 @@ void Unit::SetMinion(Minion *minion, bool apply)
             }
         }
 
-        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(minion->m_unitData->CreatedBySpell, GetMap()->GetDifficultyID());
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(minion->m_unitData->CreatedBySpell, DIFFICULTY_NONE);
         // Remove infinity cooldown
         if (spellInfo && (spellInfo->IsCooldownStartedOnEvent()))
             GetSpellHistory()->SendCooldownEvent(spellInfo);
@@ -7887,7 +7879,11 @@ int64 Unit::GetHealthGain(int64 dVal)
 
 void Unit::TriggerOnHealthChangeAuras(uint64 oldVal, uint64 newVal)
 {
-    for (AuraEffect const* effect : GetAuraEffectsByType(SPELL_AURA_TRIGGER_SPELL_ON_HEALTH_PCT))
+    if (!HasAuraType(SPELL_AURA_TRIGGER_SPELL_ON_HEALTH_PCT))
+        return;
+
+    AuraEffectList effects = GetAuraEffectsByType(SPELL_AURA_TRIGGER_SPELL_ON_HEALTH_PCT);
+    for (AuraEffect const* effect : effects)
     {
         uint32 triggerHealthPct = effect->GetAmount();
         uint32 triggerSpell = effect->GetSpellEffectInfo().TriggerSpell;
@@ -8705,7 +8701,7 @@ void Unit::UpdateUnitMod(UnitMods unitMod)
         case UNIT_MOD_DAMAGE_RANGED:       UpdateDamagePhysical(RANGED_ATTACK);  break;
 
         default:
-            ASSERT(false, "Not implemented UnitMod %u", unitMod);
+            ABORT_MSG("Not implemented UnitMod %u", unitMod);
             break;
     }
 }

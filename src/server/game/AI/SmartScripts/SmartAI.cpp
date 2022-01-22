@@ -523,9 +523,6 @@ void SmartAI::InitializeAI()
     _despawnTime = 0;
     _despawnState = 0;
     _escortState = SMART_ESCORT_NONE;
-
-    me->SetVisible(true);
-
     _followGUID.Clear(); // do not reset follower on Reset(), we need it after combat evade
     _followDistance = 0;
     _followAngle = 0;
@@ -590,6 +587,11 @@ void SmartAI::KilledUnit(Unit* victim)
 void SmartAI::JustSummoned(Creature* creature)
 {
     GetScript()->ProcessEventsFor(SMART_EVENT_SUMMONED_UNIT, creature);
+}
+
+void SmartAI::SummonedCreatureDies(Creature* summon, Unit* /*killer*/)
+{
+    GetScript()->ProcessEventsFor(SMART_EVENT_SUMMONED_UNIT_DIES, summon);
 }
 
 void SmartAI::AttackStart(Unit* who)
@@ -864,9 +866,9 @@ void SmartAI::StopFollow(bool complete)
     GetScript()->ProcessEventsFor(SMART_EVENT_FOLLOW_COMPLETED, player);
 }
 
-void SmartAI::SetTimedActionList(SmartScriptHolder& e, uint32 entry, Unit* invoker)
+void SmartAI::SetTimedActionList(SmartScriptHolder& e, uint32 entry, Unit* invoker, uint32 startFromEventId)
 {
-    GetScript()->SetTimedActionList(e, entry, invoker);
+    GetScript()->SetTimedActionList(e, entry, invoker, startFromEventId);
 }
 
 void SmartAI::OnGameEvent(bool start, uint16 eventId)
@@ -935,13 +937,13 @@ void SmartAI::UpdatePath(uint32 diff)
     // handle pause
     if (HasEscortState(SMART_ESCORT_PAUSED) && (_waypointReached || _waypointPauseForced))
     {
-        if (_waypointPauseTimer <= diff)
+        if (!me->IsInCombat() && !HasEscortState(SMART_ESCORT_RETURNING))
         {
-            if (!me->IsInCombat() && !HasEscortState(SMART_ESCORT_RETURNING))
+            if (_waypointPauseTimer <= diff)
                 ResumePath();
+            else
+                _waypointPauseTimer -= diff;
         }
-        else
-            _waypointPauseTimer -= diff;
     }
     else if (_waypointPathEnded) // end path
     {
@@ -1100,6 +1102,11 @@ void SmartGameObjectAI::SpellHit(WorldObject* caster, SpellInfo const* spellInfo
 void SmartGameObjectAI::JustSummoned(Creature* creature)
 {
     GetScript()->ProcessEventsFor(SMART_EVENT_SUMMONED_UNIT, creature);
+}
+
+void SmartGameObjectAI::SummonedCreatureDies(Creature* summon, Unit* /*killer*/)
+{
+    GetScript()->ProcessEventsFor(SMART_EVENT_SUMMONED_UNIT_DIES, summon);
 }
 
 void SmartGameObjectAI::SummonedCreatureDespawn(Creature* unit)

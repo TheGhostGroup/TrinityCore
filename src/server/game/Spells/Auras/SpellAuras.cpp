@@ -249,7 +249,9 @@ void AuraApplication::BuildUpdatePacket(WorldPackets::Spells::AuraInfo& auraInfo
     // send stack amount for aura which could be stacked (never 0 - causes incorrect display) or charges
     // stack amount has priority over charges (checked on retail with spell 50262)
     auraData.Applications = aura->IsUsingStacks() ? aura->GetStackAmount() : aura->GetCharges();
-    if (!(auraData.Flags & AFLAG_NOCASTER))
+    if (!aura->GetCasterGUID().IsUnit())
+        auraData.CastUnit = ObjectGuid::Empty; // optional data is filled in, but cast unit contains empty guid in packet
+    else if (!(auraData.Flags & AFLAG_NOCASTER))
         auraData.CastUnit = aura->GetCasterGUID();
 
     if (auraData.Flags & AFLAG_DURATION)
@@ -261,18 +263,24 @@ void AuraApplication::BuildUpdatePacket(WorldPackets::Spells::AuraInfo& auraInfo
     if (auraData.Flags & AFLAG_SCALABLE)
     {
         auraData.Points.reserve(aura->GetAuraEffects().size());
-        auraData.EstimatedPoints.reserve(aura->GetAuraEffects().size());
+        bool hasEstimatedAmounts = false;
         for (AuraEffect const* effect : GetBase()->GetAuraEffects())
         {
             if (effect && HasEffect(effect->GetEffIndex()))       // Not all of aura's effects have to be applied on every target
             {
                 Trinity::Containers::EnsureWritableVectorIndex(auraData.Points, effect->GetEffIndex()) = float(effect->GetAmount());
                 if (effect->GetEstimatedAmount())
-                    Trinity::Containers::EnsureWritableVectorIndex(auraData.EstimatedPoints, effect->GetEffIndex()) = *effect->GetEstimatedAmount();
+                    hasEstimatedAmounts = true;
             }
         }
-        if (!auraData.EstimatedPoints.empty())
-            auraData.EstimatedPoints.resize(auraData.Points.size()); // pad to equal sizes
+        if (hasEstimatedAmounts)
+        {
+            // When sending EstimatedPoints all effects (at least up to the last one that uses GetEstimatedAmount) must have proper value in packet
+            auraData.EstimatedPoints.resize(auraData.Points.size());
+            for (AuraEffect const* effect : GetBase()->GetAuraEffects())
+                if (effect && HasEffect(effect->GetEffIndex()))       // Not all of aura's effects have to be applied on every target
+                    auraData.EstimatedPoints[effect->GetEffIndex()] = effect->GetEstimatedAmount().value_or(effect->GetAmount());
+        }
     }
 }
 
@@ -386,14 +394,7 @@ Aura* Aura::Create(AuraCreateInfo& createInfo)
     // try to get caster of aura
     if (!createInfo.CasterGUID.IsEmpty())
     {
-        // world gameobjects can't own auras and they send empty casterguid
-        // checked on sniffs with spell 22247
-        if (createInfo.CasterGUID.IsGameObject())
-        {
-            createInfo.Caster = nullptr;
-            createInfo.CasterGUID.Clear();
-        }
-        else
+        if (createInfo.CasterGUID.IsUnit())
         {
             if (createInfo._owner->GetGUID() == createInfo.CasterGUID)
                 createInfo.Caster = createInfo._owner->ToUnit();
@@ -519,6 +520,14 @@ Unit* Aura::GetCaster() const
         return aurApp->GetTarget();
 
     return ObjectAccessor::GetUnit(*GetOwner(), GetCasterGUID());
+}
+
+WorldObject* Aura::GetWorldObjectCaster() const
+{
+    if (GetCasterGUID().IsUnit())
+        return GetCaster();
+
+    return ObjectAccessor::GetWorldObject(*GetOwner(), GetCasterGUID());
 }
 
 AuraEffect* Aura::GetEffect(uint32 index) const

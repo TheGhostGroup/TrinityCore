@@ -416,7 +416,7 @@ bool SpellEffectInfo::IsEffect() const
 
 bool SpellEffectInfo::IsEffect(SpellEffectName effectName) const
 {
-    return Effect == uint32(effectName);
+    return Effect == effectName;
 }
 
 bool SpellEffectInfo::IsAura() const
@@ -4285,21 +4285,27 @@ bool SpellInfo::IsHighRankOf(SpellInfo const* spellInfo) const
     return false;
 }
 
-uint32 SpellInfo::GetSpellXSpellVisualId(WorldObject const* caster /*= nullptr*/) const
+uint32 SpellInfo::GetSpellXSpellVisualId(WorldObject const* caster /*= nullptr*/, WorldObject const* viewer /*= nullptr*/) const
 {
     for (SpellXSpellVisualEntry const* visual : _visuals)
     {
-        PlayerConditionEntry const* playerCondition = sPlayerConditionStore.LookupEntry(visual->CasterPlayerConditionID);
-        if (!playerCondition || (caster && caster->GetTypeId() == TYPEID_PLAYER && sConditionMgr->IsPlayerMeetingCondition(caster->ToPlayer(), playerCondition)))
-            return visual->ID;
+        if (PlayerConditionEntry const* playerCondition = sPlayerConditionStore.LookupEntry(visual->CasterPlayerConditionID))
+            if (!caster || !caster->IsPlayer() || !ConditionMgr::IsPlayerMeetingCondition(caster->ToPlayer(), playerCondition))
+                continue;
+
+        if (UnitConditionEntry const* unitCondition = sUnitConditionStore.LookupEntry(visual->CasterUnitConditionID))
+            if (!caster || !caster->IsUnit() || !ConditionMgr::IsUnitMeetingCondition(caster->ToUnit(), Object::ToUnit(viewer), unitCondition))
+                continue;
+
+        return visual->ID;
     }
 
     return 0;
 }
 
-uint32 SpellInfo::GetSpellVisual(WorldObject const* caster /*= nullptr*/) const
+uint32 SpellInfo::GetSpellVisual(WorldObject const* caster /*= nullptr*/, WorldObject const* viewer /*= nullptr*/) const
 {
-    if (SpellXSpellVisualEntry const* visual = sSpellXSpellVisualStore.LookupEntry(GetSpellXSpellVisualId(caster)))
+    if (SpellXSpellVisualEntry const* visual = sSpellXSpellVisualStore.LookupEntry(GetSpellXSpellVisualId(caster, viewer)))
     {
         //if (visual->LowViolenceSpellVisualID && forPlayer->GetViolenceLevel() operator 2)
         //    return visual->LowViolenceSpellVisualID;
@@ -4555,8 +4561,7 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, SpellEffectInfo const& ef
         // non-positive aura use
         switch (effect.ApplyAuraName)
         {
-            case SPELL_AURA_MOD_DAMAGE_DONE:            // dependent from basepoint sign (negative -> negative)
-            case SPELL_AURA_MOD_STAT:
+            case SPELL_AURA_MOD_STAT:                   // dependent from basepoint sign (negative -> negative)
             case SPELL_AURA_MOD_SKILL:
             case SPELL_AURA_MOD_SKILL_2:
             case SPELL_AURA_MOD_DODGE_PERCENT:
@@ -4570,34 +4575,39 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, SpellEffectInfo const& ef
             case SPELL_AURA_MOD_SPELL_HIT_CHANCE:
             case SPELL_AURA_MOD_SPELL_CRIT_CHANCE:
             case SPELL_AURA_MOD_RANGED_HASTE:
+            case SPELL_AURA_MOD_MELEE_RANGED_HASTE:
             case SPELL_AURA_MOD_CASTING_SPEED_NOT_STACK:
             case SPELL_AURA_HASTE_SPELLS:
-            case SPELL_AURA_MOD_RESISTANCE:
             case SPELL_AURA_MOD_RECOVERY_RATE_BY_SPELL_LABEL:
             case SPELL_AURA_MOD_DETECT_RANGE:
             case SPELL_AURA_MOD_INCREASE_HEALTH_PERCENT:
             case SPELL_AURA_MOD_TOTAL_STAT_PERCENTAGE:
             case SPELL_AURA_MOD_INCREASE_SWIM_SPEED:
+            case SPELL_AURA_MOD_PERCENT_STAT:
+            case SPELL_AURA_MOD_INCREASE_HEALTH:
+            case SPELL_AURA_MOD_SPEED_ALWAYS:
                 if (bp < 0 || bpScalePerLevel < 0) //TODO: What if both are 0? Should it be a buff or debuff?
                     return false;
                 break;
             case SPELL_AURA_MOD_ATTACKSPEED:            // some buffs have negative bp, check both target and bp
             case SPELL_AURA_MOD_MELEE_HASTE:
+            case SPELL_AURA_MOD_DAMAGE_DONE:
+            case SPELL_AURA_MOD_RESISTANCE:
             case SPELL_AURA_MOD_RESISTANCE_PCT:
             case SPELL_AURA_MOD_RATING:
             case SPELL_AURA_MOD_ATTACK_POWER:
             case SPELL_AURA_MOD_RANGED_ATTACK_POWER:
             case SPELL_AURA_MOD_DAMAGE_PERCENT_DONE:
             case SPELL_AURA_MOD_SPEED_SLOW_ALL:
+            case SPELL_AURA_MELEE_SLOW:
             case SPELL_AURA_MOD_ATTACK_POWER_PCT:
+            case SPELL_AURA_MOD_HEALING_DONE_PERCENT:
                 if (!_isPositiveTarget(effect) || bp < 0)
                     return false;
                 break;
             case SPELL_AURA_MOD_DAMAGE_TAKEN:           // dependent from basepoint sign (positive -> negative)
             case SPELL_AURA_MOD_MELEE_DAMAGE_TAKEN:
             case SPELL_AURA_MOD_MELEE_DAMAGE_TAKEN_PCT:
-            case SPELL_AURA_MOD_COOLDOWN:
-            case SPELL_AURA_MOD_CHARGE_COOLDOWN:
             case SPELL_AURA_MOD_POWER_COST_SCHOOL:
             case SPELL_AURA_MOD_POWER_COST_SCHOOL_PCT:
             case SPELL_AURA_MOD_MECHANIC_DAMAGE_TAKEN_PERCENT:
@@ -4606,6 +4616,10 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, SpellEffectInfo const& ef
                 break;
             case SPELL_AURA_MOD_DAMAGE_PERCENT_TAKEN:   // check targets and basepoints (ex Recklessness)
                 if (!_isPositiveTarget(effect) && bp > 0)
+                    return false;
+                break;
+            case SPELL_AURA_MOD_HEALTH_REGEN_PERCENT:   // check targets and basepoints (target enemy and negative bp -> negative)
+                if (!_isPositiveTarget(effect) && bp < 0)
                     return false;
                 break;
             case SPELL_AURA_ADD_TARGET_TRIGGER:
@@ -4662,6 +4676,19 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, SpellEffectInfo const& ef
             case SPELL_AURA_DUMMY:
             case SPELL_AURA_PERIODIC_DUMMY:
             case SPELL_AURA_MOD_HEALING:
+            case SPELL_AURA_MOD_WEAPON_CRIT_PERCENT:
+            case SPELL_AURA_POWER_BURN:
+            case SPELL_AURA_MOD_COOLDOWN:
+            case SPELL_AURA_MOD_CHARGE_COOLDOWN:
+            case SPELL_AURA_MOD_INCREASE_SPEED:
+            case SPELL_AURA_MOD_PARRY_PERCENT:
+            case SPELL_AURA_SET_VEHICLE_ID:
+            case SPELL_AURA_PERIODIC_ENERGIZE:
+            case SPELL_AURA_EFFECT_IMMUNITY:
+            case SPELL_AURA_OVERRIDE_CLASS_SCRIPTS:
+            case SPELL_AURA_MOD_SHAPESHIFT:
+            case SPELL_AURA_MOD_THREAT:
+            case SPELL_AURA_PROC_TRIGGER_SPELL_WITH_VALUE:
                 // check target for positive and negative spells
                 if (!_isPositiveTarget(effect))
                     return false;

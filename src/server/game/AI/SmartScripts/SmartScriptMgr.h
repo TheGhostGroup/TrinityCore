@@ -178,8 +178,9 @@ enum SMART_EVENT
     SMART_EVENT_SCENE_TRIGGER            = 79,      // param_string : triggerName
     SMART_EVENT_SCENE_CANCEL             = 80,      // none
     SMART_EVENT_SCENE_COMPLETE           = 81,      // none
+    SMART_EVENT_SUMMONED_UNIT_DIES       = 82,      // CreatureId(0 all), CooldownMin, CooldownMax
 
-    SMART_EVENT_END                      = 82
+    SMART_EVENT_END                      = 83
 };
 
 struct SmartEvent
@@ -612,7 +613,8 @@ enum SMART_ACTION
     SMART_ACTION_SET_UNINTERACTIBLE                 = 146,    // 0/1
     SMART_ACTION_ACTIVATE_GAMEOBJECT                = 147,    // GameObjectActions
     SMART_ACTION_ADD_TO_STORED_TARGET_LIST          = 148,    // varID
-    SMART_ACTION_END                                = 149
+    SMART_ACTION_BECOME_PERSONAL_CLONE_FOR_PLAYER   = 149,    // summonType 1-8, duration in ms
+    SMART_ACTION_END                                = 150
 };
 
 enum class SmartActionSummonCreatureFlags
@@ -1240,6 +1242,12 @@ struct SmartAction
             uint32 id;
         } addToStoredTargets;
 
+        struct
+        {
+            uint32 type;
+            uint32 duration;
+        } becomePersonalClone;
+
         //! Note for any new future actions
         //! All parameters must have type uint32
 
@@ -1579,7 +1587,8 @@ const uint32 SmartAIEventMask[SMART_EVENT_END][2] =
     {SMART_EVENT_SCENE_START,               SMART_SCRIPT_TYPE_MASK_SCENE },
     {SMART_EVENT_SCENE_TRIGGER,             SMART_SCRIPT_TYPE_MASK_SCENE },
     {SMART_EVENT_SCENE_CANCEL,              SMART_SCRIPT_TYPE_MASK_SCENE },
-    {SMART_EVENT_SCENE_COMPLETE,            SMART_SCRIPT_TYPE_MASK_SCENE }
+    {SMART_EVENT_SCENE_COMPLETE,            SMART_SCRIPT_TYPE_MASK_SCENE },
+    {SMART_EVENT_SUMMONED_UNIT_DIES,        SMART_SCRIPT_TYPE_MASK_CREATURE + SMART_SCRIPT_TYPE_MASK_GAMEOBJECT },
 };
 
 enum SmartEventFlags
