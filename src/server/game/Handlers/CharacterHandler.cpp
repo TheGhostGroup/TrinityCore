@@ -1130,7 +1130,7 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
             {
                 case PlayerCreateMode::Normal:
                     if (playerInfo->introMovieId)
-                        pCurrChar->SendMovieStart(playerInfo->introMovieId.get());
+                        pCurrChar->SendMovieStart(*playerInfo->introMovieId);
                     else if (playerInfo->introSceneId)
                         pCurrChar->GetSceneMgr().PlayScene(*playerInfo->introSceneId);
                     else if (sChrClassesStore.AssertEntry(pCurrChar->GetClass())->CinematicSequenceID)
@@ -1418,7 +1418,7 @@ void WorldSession::SendFeatureSystemStatus()
     features.VoiceEnabled = false;
     features.BrowserEnabled = false; // Has to be false, otherwise client will crash if "Customer Support" is opened
 
-    features.EuropaTicketSystemStatus = boost::in_place();
+    features.EuropaTicketSystemStatus.emplace();
     features.EuropaTicketSystemStatus->ThrottleState.MaxTries = 10;
     features.EuropaTicketSystemStatus->ThrottleState.PerMilliseconds = 60000;
     features.EuropaTicketSystemStatus->ThrottleState.TryCount = 1;
@@ -2486,12 +2486,12 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
                     // new team
                     if (newTeamId == TEAM_ALLIANCE)
                     {
-                        uint32 maskID = htitleInfo->MaskID;
-                        uint32 index = maskID / 32;
+                        uint32 bitIndex = htitleInfo->MaskID;
+                        uint32 index = bitIndex / 32;
                         if (index >= knownTitles.size())
                             continue;
 
-                        uint32 old_flag = 1 << (maskID % 32);
+                        uint32 old_flag = 1 << (bitIndex % 32);
                         uint32 new_flag = 1 << (atitleInfo->MaskID % 32);
                         if (knownTitles[index] & old_flag)
                         {
@@ -2502,12 +2502,12 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
                     }
                     else
                     {
-                        uint32 maskID = atitleInfo->MaskID;
-                        uint32 index = maskID / 32;
+                        uint32 bitIndex = htitleInfo->MaskID;
+                        uint32 index = bitIndex / 32;
                         if (index >= knownTitles.size())
                             continue;
 
-                        uint32 old_flag = 1 << (maskID % 32);
+                        uint32 old_flag = 1 << (bitIndex % 32);
                         uint32 new_flag = 1 << (htitleInfo->MaskID % 32);
                         if (knownTitles[index] & old_flag)
                         {
@@ -2768,7 +2768,7 @@ void WorldSession::SendCharFactionChange(ResponseCodes result, WorldPackets::Cha
 
     if (result == RESPONSE_SUCCESS)
     {
-        packet.Display = boost::in_place();
+        packet.Display.emplace();
         packet.Display->Name = factionChangeInfo->Name;
         packet.Display->SexID = factionChangeInfo->SexID;
         packet.Display->Customizations = &factionChangeInfo->Customizations;

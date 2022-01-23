@@ -175,7 +175,7 @@ void SpellCastTargets::Write(WorldPackets::Spells::SpellTargetData& data)
 
     if (m_targetMask & TARGET_FLAG_SOURCE_LOCATION)
     {
-        data.SrcLocation = boost::in_place();
+        data.SrcLocation.emplace();
         data.SrcLocation->Transport = m_src._transportGUID; // relative position guid here - transport for example
         if (!m_src._transportGUID.IsEmpty())
             data.SrcLocation->Location = m_src._transportOffset;
@@ -185,7 +185,7 @@ void SpellCastTargets::Write(WorldPackets::Spells::SpellTargetData& data)
 
     if (m_targetMask & TARGET_FLAG_DEST_LOCATION)
     {
-        data.DstLocation = boost::in_place();
+        data.DstLocation.emplace();
         data.DstLocation->Transport = m_dst._transportGUID; // relative position guid here - transport for example
         if (!m_dst._transportGUID.IsEmpty())
             data.DstLocation->Location = m_dst._transportOffset;
@@ -3049,7 +3049,7 @@ void Spell::DoSpellEffectHit(Unit* unit, SpellEffectInfo const& spellEffectInfo,
                         }
                     }
                     else
-                        hitInfo.AuraDuration = m_spellValue->Duration.get();
+                        hitInfo.AuraDuration = *m_spellValue->Duration;
 
                     if (hitInfo.AuraDuration != hitInfo.HitAura->GetMaxDuration())
                     {
@@ -3375,7 +3375,7 @@ void Spell::cancel()
     {
         case SPELL_STATE_PREPARING:
             CancelGlobalCooldown();
-            /* fallthrough */
+            [[fallthrough]];
         case SPELL_STATE_DELAYED:
             SendInterrupted(0);
             SendCastResult(SPELL_FAILED_INTERRUPTED);
@@ -3750,7 +3750,7 @@ void Spell::handle_immediate()
                 m_caster->ModSpellDurationTime(m_spellInfo, duration, this);
             }
             else
-                duration = m_spellValue->Duration.get();
+                duration = *m_spellValue->Duration;
 
             m_channeledDuration = duration;
             SendChannelStart(duration);
@@ -4479,7 +4479,7 @@ void Spell::SendSpellStart()
 
     if (castFlags & CAST_FLAG_RUNE_LIST) // rune cooldowns list
     {
-        castData.RemainingRunes = boost::in_place();
+        castData.RemainingRunes.emplace();
 
         //TODO: There is a crash caused by a spell with CAST_FLAG_RUNE_LIST casted by a creature
         //The creature is the mover of a player, so HandleCastSpellOpcode uses it as the caster
@@ -4593,7 +4593,7 @@ void Spell::SendSpellGo()
 
     if (castFlags & CAST_FLAG_RUNE_LIST) // rune cooldowns list
     {
-        castData.RemainingRunes = boost::in_place();
+        castData.RemainingRunes.emplace();
 
         Player* player = ASSERT_NOTNULL(m_caster->ToPlayer());
         castData.RemainingRunes->Start = m_runesState; // runes state before
@@ -4900,7 +4900,7 @@ void Spell::SendChannelStart(uint32 duration)
 
     if (schoolImmunityMask || mechanicImmunityMask)
     {
-        spellChannelStart.InterruptImmunities = boost::in_place();
+        spellChannelStart.InterruptImmunities.emplace();
         spellChannelStart.InterruptImmunities->SchoolImmunities = schoolImmunityMask;
         spellChannelStart.InterruptImmunities->Immunities = mechanicImmunityMask;
     }
@@ -5953,7 +5953,7 @@ SpellCastResult Spell::CheckCast(bool strict, int32* param1 /*= nullptr*/, int32
                     case SUMMON_CATEGORY_PET:
                         if (!m_spellInfo->HasAttribute(SPELL_ATTR1_DISMISS_PET) && !unitCaster->GetPetGUID().IsEmpty())
                             return SPELL_FAILED_ALREADY_HAVE_SUMMON;
-                        /* fallthrough - check both GetPetGUID() and GetCharmGUID for SUMMON_CATEGORY_PET*/
+                        [[fallthrough]]; // check both GetPetGUID() and GetCharmGUID for SUMMON_CATEGORY_PET
                     case SUMMON_CATEGORY_PUPPET:
                         if (!unitCaster->GetCharmedGUID().IsEmpty())
                             return SPELL_FAILED_ALREADY_HAVE_CHARM;
@@ -7144,7 +7144,7 @@ SpellCastResult Spell::CheckItems(int32* param1 /*= nullptr*/, int32* param2 /*=
                         return SPELL_FAILED_DONT_REPORT;
                     }
                 }
-                /* fallthrough */
+                [[fallthrough]];
             case SPELL_EFFECT_ENCHANT_ITEM_PRISMATIC:
             {
                 Item* targetItem = m_targets.GetItemTarget();
@@ -7516,7 +7516,7 @@ void Spell::DelayedChannel()
 
 bool Spell::HasPowerTypeCost(Powers power) const
 {
-    return GetPowerTypeCostAmount(power).is_initialized();
+    return GetPowerTypeCostAmount(power).has_value();
 }
 
 Optional<int32> Spell::GetPowerTypeCostAmount(Powers power) const
@@ -8577,7 +8577,7 @@ bool WorldObjectSpellTargetCheck::operator()(WorldObject* target) const
                     return false;
                 if (refUnit->GetClass() != unitTarget->GetClass())
                     return false;
-                /* fallthrough */
+                [[fallthrough]];
             case TARGET_CHECK_RAID:
                 if (!refUnit)
                     return false;
@@ -8616,6 +8616,7 @@ bool WorldObjectSpellTargetCheck::operator()(WorldObject* target) const
             case TARGET_OBJECT_TYPE_CORPSE_ENEMY:
                 if (unitTarget->IsAlive())
                     return false;
+                break;
             default:
                 break;
         }

@@ -19,8 +19,8 @@
 #define METRIC_H__
 
 #include "Define.h"
+#include "Duration.h"
 #include "MPSCQueue.h"
-#include <chrono>
 #include <functional>
 #include <iosfwd>
 #include <memory>
@@ -48,7 +48,7 @@ typedef std::pair<std::string, std::string> MetricTag;
 struct MetricData
 {
     std::string Category;
-    std::chrono::system_clock::time_point Timestamp;
+    SystemTimePoint Timestamp;
     MetricDataType Type;
     std::vector<MetricTag> Tags;
 
@@ -90,6 +90,7 @@ private:
     static std::string FormatInfluxDBValue(char const* value);
     static std::string FormatInfluxDBValue(double value);
     static std::string FormatInfluxDBValue(float value);
+    static std::string FormatInfluxDBValue(std::chrono::nanoseconds value);
 
     static std::string FormatInfluxDBTagValue(std::string const& value);
 
@@ -127,23 +128,57 @@ public:
 
 #define sMetric Metric::instance()
 
+
+template<typename LoggerType>
+class MetricStopWatch
+{
+public:
+    MetricStopWatch(LoggerType&& loggerFunc) :
+        _logger(std::forward<LoggerType>(loggerFunc)),
+        _startTime(sMetric->IsEnabled() ? std::chrono::steady_clock::now() : TimePoint())
+    {
+    }
+
+    ~MetricStopWatch()
+    {
+        if (sMetric->IsEnabled())
+            _logger(_startTime);
+    }
+
+private:
+    LoggerType _logger;
+    TimePoint _startTime;
+};
+
+template<typename LoggerType>
+MetricStopWatch<LoggerType> MakeMetricStopWatch(LoggerType&& loggerFunc)
+{
+    return { std::forward<LoggerType>(loggerFunc) };
+}
+
 #define TC_METRIC_TAG(name, value) { name, value }
 
-#ifdef PERFORMANCE_PROFILING
+#define TC_METRIC_DO_CONCAT(a, b) a##b
+#define TC_METRIC_CONCAT(a, b) TC_METRIC_DO_CONCAT(a, b)
+#define TC_METRIC_UNIQUE_NAME(name) TC_METRIC_CONCAT(name, __LINE__)
+
+#if defined PERFORMANCE_PROFILING || defined WITHOUT_METRICS
 #define TC_METRIC_EVENT(category, title, description) ((void)0)
 #define TC_METRIC_VALUE(category, value) ((void)0)
-#elif TRINITY_PLATFORM != TRINITY_PLATFORM_WINDOWS
-#define TC_METRIC_EVENT(category, title, description)                  \
-        do {                                                           \
-            if (sMetric->IsEnabled())                                  \
-                sMetric->LogEvent(category, title, description);       \
-        } while (0)
-#define TC_METRIC_VALUE(category, value, ...)                          \
-        do {                                                           \
-            if (sMetric->IsEnabled())                                  \
-                sMetric->LogValue(category, value, { __VA_ARGS__ });   \
-        } while (0)
+#define TC_METRIC_TIMER(category, ...) ((void)0)
 #else
+#  if TRINITY_PLATFORM != TRINITY_PLATFORM_WINDOWS
+#define TC_METRIC_EVENT(category, title, description)                  \
+        do {                                                           \
+            if (sMetric->IsEnabled())                                  \
+                sMetric->LogEvent(category, title, description);       \
+        } while (0)
+#define TC_METRIC_VALUE(category, value, ...)                          \
+        do {                                                           \
+            if (sMetric->IsEnabled())                                  \
+                sMetric->LogValue(category, value, { __VA_ARGS__ });   \
+        } while (0)
+#  else
 #define TC_METRIC_EVENT(category, title, description)                  \
         __pragma(warning(push))                                        \
         __pragma(warning(disable:4127))                                \
@@ -160,6 +195,12 @@ public:
                 sMetric->LogValue(category, value, { __VA_ARGS__ });   \
         } while (0)                                                    \
         __pragma(warning(pop))
+#  endif
+#define TC_METRIC_TIMER(category, ...)                           \
+        MetricStopWatch TC_METRIC_UNIQUE_NAME(__tc_metric_stop_watch) = MakeMetricStopWatch([&](TimePoint start) \
+        {                                                                                                             \
+            sMetric->LogValue(category, std::chrono::steady_clock::now() - start, { __VA_ARGS__ });               \
+        });
 #endif
 
 #endif // METRIC_H__

@@ -137,7 +137,7 @@ void Metric::SendBatch()
             batchedData << ",realm=" << _realmName;
 
         for (MetricTag const& tag : data->Tags)
-            batchedData << "," << tag.first << "=" << tag.second;
+            batchedData << "," << tag.first << "=" << FormatInfluxDBTagValue(tag.second);
 
         batchedData << " ";
 
@@ -277,6 +277,11 @@ std::string Metric::FormatInfluxDBTagValue(std::string const& value)
 {
     // ToDo: should handle '=' and ',' characters too
     return boost::replace_all_copy(value, " ", "\\ ");
+}
+
+std::string Metric::FormatInfluxDBValue(std::chrono::nanoseconds value)
+{
+    return FormatInfluxDBValue(std::chrono::duration_cast<std::chrono::milliseconds>(value).count());
 }
 
 Metric::Metric()

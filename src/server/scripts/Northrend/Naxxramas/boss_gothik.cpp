@@ -517,7 +517,7 @@ class boss_gothik : public CreatureScript
                                 _lastTeleportDead = !_lastTeleportDead;
 
                                 events.CancelEvent(EVENT_BOLT);
-                                events.ScheduleEvent(EVENT_RESUME_ATTACK, 2 * IN_MILLISECONDS, 0, PHASE_TWO);
+                                events.ScheduleEvent(EVENT_RESUME_ATTACK, 2s, 0, PHASE_TWO);
                                 events.Repeat(Seconds(20));
                             }
                             break;
@@ -589,7 +589,7 @@ struct npc_gothik_minion_baseAI : public ScriptedAI
             {
                 case ACTION_GATE_OPENED:
                     _gateIsOpen = true;
-                    /* fallthrough */
+                    [[fallthrough]];
                 case ACTION_ACQUIRE_TARGET:
                     if (Player* target = FindEligibleTarget(me, _gateIsOpen))
                     {

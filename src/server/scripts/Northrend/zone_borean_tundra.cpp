@@ -1621,7 +1621,7 @@ public:
                 _events.ScheduleEvent(EVENT_TALK_1, Seconds(2));
                 _events.CancelEvent(EVENT_OOC_TALK);
                 Start(true, true, player->GetGUID());
-                SetPauseTimer(12 * IN_MILLISECONDS);
+                SetPauseTimer(12s);
             }
         }
 
@@ -1761,7 +1761,7 @@ public:
 };
 
 /*######
-## Help Those That Cannot Help Themselves, Quest 11876
+## Valiance Keep Cannoneer script to activate cannons
 ######*/
 
 enum Valiancekeepcannons

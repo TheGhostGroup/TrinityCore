@@ -7810,8 +7810,8 @@ void ObjectMgr::LoadGameObjectTemplateAddons()
 {
     uint32 oldMSTime = getMSTime();
 
-    //                                               0      1        2      3        4        5              6
-    QueryResult result = WorldDatabase.Query("SELECT entry, faction, flags, mingold, maxgold, WorldEffectID, AIAnimKitID FROM gameobject_template_addon");
+    //                                               0       1       2      3        4        5        6        7        8        9        10             11
+    QueryResult result = WorldDatabase.Query("SELECT entry, faction, flags, mingold, maxgold, artkit0, artkit1, artkit2, artkit3, artkit4, WorldEffectID, AIAnimKitID FROM gameobject_template_addon");
 
     if (!result)
     {
@@ -7838,8 +7838,23 @@ void ObjectMgr::LoadGameObjectTemplateAddons()
         gameObjectAddon.Flags         = fields[2].GetUInt32();
         gameObjectAddon.Mingold       = fields[3].GetUInt32();
         gameObjectAddon.Maxgold       = fields[4].GetUInt32();
-        gameObjectAddon.WorldEffectID = fields[5].GetUInt32();
-        gameObjectAddon.AIAnimKitID   = fields[6].GetUInt32();
+        gameObjectAddon.WorldEffectID = fields[10].GetUInt32();
+        gameObjectAddon.AIAnimKitID   = fields[11].GetUInt32();
+
+        for (uint32 i = 0; i < gameObjectAddon.ArtKits.size(); ++i)
+        {
+            uint32 artKitID = fields[5 + i].GetUInt32();
+            if (!artKitID)
+                continue;
+
+            if (!sGameObjectArtKitStore.LookupEntry(artKitID))
+            {
+                TC_LOG_ERROR("sql.sql", "GameObject (Entry: %u) has invalid `artkit%d` (%d) defined, set to zero instead.", entry, i, artKitID);
+                continue;
+            }
+
+            gameObjectAddon.ArtKits[i] = artKitID;
+        }
 
         // checks
         if (gameObjectAddon.Faction && !sFactionTemplateStore.LookupEntry(gameObjectAddon.Faction))
@@ -10907,9 +10922,7 @@ void ObjectMgr::LoadPlayerChoices()
                 continue;
             }
 
-            responseItr->Reward = boost::in_place();
-
-            PlayerChoiceResponseReward* reward = responseItr->Reward.get_ptr();
+            PlayerChoiceResponseReward* reward = &responseItr->Reward.emplace();
             reward->TitleId          = fields[2].GetInt32();
             reward->PackageId        = fields[3].GetInt32();
             reward->SkillLineId      = fields[4].GetInt32();
@@ -11163,8 +11176,7 @@ void ObjectMgr::LoadPlayerChoices()
                 continue;
             }
 
-            responseItr->MawPower.emplace();
-            PlayerChoiceResponseMawPower& mawPower = responseItr->MawPower.get();
+            PlayerChoiceResponseMawPower& mawPower = responseItr->MawPower.emplace();
             mawPower.TypeArtFileID = fields[2].GetInt32();
             mawPower.Rarity = fields[3].GetInt32();
             mawPower.RarityColor = fields[4].GetUInt32();
