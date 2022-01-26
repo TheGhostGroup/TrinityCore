@@ -569,7 +569,7 @@ struct BloodPrincesBossAI : public BossAI
                 me->SetImmuneToPC(false);
                 me->RemoveDynamicFlag(UNIT_DYNFLAG_DEAD);
                 me->RemoveUnitFlag2(UNIT_FLAG2_FEIGN_DEATH);
-                me->m_Events.AddEvent(new StandUpEvent(me), me->m_Events.CalculateTime(1000));
+                me->m_Events.AddEvent(new StandUpEvent(me), me->m_Events.CalculateTime(1s));
                 break;
             case ACTION_CAST_INVOCATION:
                 Talk(SelectInvocationSay());
@@ -823,7 +823,7 @@ class boss_prince_valanar_icc : public CreatureScript
                     }
                     case NPC_SHOCK_VORTEX:
                         summon->CastSpell(summon, SPELL_SHOCK_VORTEX_DUMMY, true);
-                        summon->m_Events.AddEvent(new VortexEvent(summon), summon->m_Events.CalculateTime(5000));
+                        summon->m_Events.AddEvent(new VortexEvent(summon), summon->m_Events.CalculateTime(5s));
                         break;
                     default:
                         break;
@@ -917,7 +917,7 @@ class npc_blood_queen_lana_thel : public CreatureScript
                         _events.SetPhase(1);
                         _events.ScheduleEvent(EVENT_INTRO_1, Seconds(14));
                         // summon a visual trigger
-                        if (Creature* summon = DoSummon(NPC_FLOATING_TRIGGER, triggerPos, 15000, TEMPSUMMON_TIMED_DESPAWN))
+                        if (Creature* summon = DoSummon(NPC_FLOATING_TRIGGER, triggerPos, 15s, TEMPSUMMON_TIMED_DESPAWN))
                         {
                             summon->CastSpell(summon, SPELL_OOC_INVOCATION_VISUAL, true);
                             summon->SetSpeedRate(MOVE_RUN, 0.14f);

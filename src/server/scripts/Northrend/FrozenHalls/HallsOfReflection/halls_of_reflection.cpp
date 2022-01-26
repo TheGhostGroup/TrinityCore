@@ -919,7 +919,7 @@ class npc_jaina_or_sylvanas_escape_hor : public CreatureScript
                     me->RemoveAurasDueToSpell(SPELL_SYLVANAS_DESTROY_ICE_WALL);
 
                 _instance->HandleGameObject(_instance->GetGuidData(DATA_ICEWALL), true);
-                me->m_Events.AddEvent(new HoRGameObjectDeleteDelayEvent(me, _instance->GetGuidData(DATA_ICEWALL)), me->m_Events.CalculateTime(5000));
+                me->m_Events.AddEvent(new HoRGameObjectDeleteDelayEvent(me, _instance->GetGuidData(DATA_ICEWALL)), me->m_Events.CalculateTime(5s));
 
                 if (Creature* wallTarget = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_ICEWALL_TARGET)))
                     wallTarget->DespawnOrUnsummon();
@@ -932,7 +932,7 @@ class npc_jaina_or_sylvanas_escape_hor : public CreatureScript
                     if (Creature* lichking = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_THE_LICH_KING_ESCAPE)))
                     {
                         lichking->StopMoving();
-                        if (Creature* wallTarget = me->SummonCreature(NPC_ICE_WALL_TARGET, IceWallTargetPosition[_icewall], TEMPSUMMON_MANUAL_DESPAWN, 720000))
+                        if (Creature* wallTarget = me->SummonCreature(NPC_ICE_WALL_TARGET, IceWallTargetPosition[_icewall], TEMPSUMMON_MANUAL_DESPAWN, 12min))
                             lichking->CastSpell(wallTarget, SPELL_SUMMON_ICE_WALL);
 
                         lichking->AI()->SetData(DATA_ICEWALL, _icewall);
@@ -1953,7 +1953,7 @@ class npc_frostsworn_general : public CreatureScript
                 SelectTargetList(playerList, 5, SelectTargetMethod::MaxThreat, 0, 0.0f, true);
                 for (Unit* target : playerList)
                 {
-                    if (Creature* reflection = me->SummonCreature(NPC_REFLECTION, *target, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 3000))
+                    if (Creature* reflection = me->SummonCreature(NPC_REFLECTION, *target, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 3s))
                     {
                         reflection->SetImmuneToPC(false);
                         target->CastSpell(reflection, SPELL_CLONE, true);
@@ -2217,7 +2217,7 @@ class npc_raging_ghoul : public CreatureScript
                 me->CastSpell(me, SPELL_RAGING_GHOUL_SPAWN, true);
                 me->SetReactState(REACT_PASSIVE);
                 me->HandleEmoteCommand(EMOTE_ONESHOT_EMERGE);
-                me->m_Events.AddEvent(new HoRStartMovementEvent(me), me->m_Events.CalculateTime(5000));
+                me->m_Events.AddEvent(new HoRStartMovementEvent(me), me->m_Events.CalculateTime(5s));
 
                 npc_escape_event_trash::IsSummonedBy(summoner);
             }
@@ -2283,7 +2283,7 @@ class npc_risen_witch_doctor : public CreatureScript
                 me->CastSpell(me, SPELL_RISEN_WITCH_DOCTOR_SPAWN, true);
                 me->SetReactState(REACT_PASSIVE);
                 me->HandleEmoteCommand(EMOTE_ONESHOT_EMERGE);
-                me->m_Events.AddEvent(new HoRStartMovementEvent(me), me->m_Events.CalculateTime(5000));
+                me->m_Events.AddEvent(new HoRStartMovementEvent(me), me->m_Events.CalculateTime(5s));
 
                 npc_escape_event_trash::IsSummonedBy(summoner);
             }

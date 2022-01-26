@@ -104,7 +104,7 @@ class boss_ozruk : public CreatureScript
                 if (summon->GetEntry() == NPC_RUPTURE_CONTROLLER)
                 {
                     summon->CastSpell(summon, SPELL_RUPTURE, true);
-                    summon->DespawnOrUnsummon(10000);
+                    summon->DespawnOrUnsummon(10s);
                 }
 
                 BossAI::JustSummoned(summon);
@@ -214,7 +214,7 @@ public:
 
         void SummonRupture(Unit* caster, Position pos)
         {
-            Creature* rupture = caster->SummonCreature(NPC_RUPTURE, pos, TEMPSUMMON_TIMED_DESPAWN, 2500);
+            Creature* rupture = caster->SummonCreature(NPC_RUPTURE, pos, TEMPSUMMON_TIMED_DESPAWN, 2500ms);
             if (!rupture)
                 return;
 
@@ -251,7 +251,7 @@ public:
                 return;
 
             for (uint8 i = 0; i < vehicle->GetAvailableSeatCount(); i++)
-                if (Creature* summon = caster->SummonCreature(NPC_BOUNCER_SPIKE, caster->GetPosition(), TEMPSUMMON_TIMED_DESPAWN, 10000))
+                if (Creature* summon = caster->SummonCreature(NPC_BOUNCER_SPIKE, caster->GetPosition(), TEMPSUMMON_TIMED_DESPAWN, 10s))
                     summon->EnterVehicle(caster, i);
         }
 
