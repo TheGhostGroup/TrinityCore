@@ -636,6 +636,10 @@ void Spell::EffectTriggerSpell()
         }
     }
 
+    Milliseconds delay = 0ms;
+    if (effectInfo->Effect == SPELL_EFFECT_TRIGGER_SPELL)
+        delay = Milliseconds(effectInfo->MiscValue);
+
     CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
     args.SetOriginalCaster(m_originalCasterGUID);
     args.SetOriginalCastId(m_castId);
@@ -644,8 +648,11 @@ void Spell::EffectTriggerSpell()
         for (uint32 i = 0; i < MAX_SPELL_EFFECTS; ++i)
             args.AddSpellMod(SpellValueMod(SPELLVALUE_BASE_POINT0 + i), damage);
 
-    // original caster guid only for GO cast
-    m_caster->CastSpell(std::move(targets), spellInfo->Id, args);
+    m_caster->m_Events.AddEventAtOffset([caster = m_caster, targets, triggered_spell_id, args]() mutable
+    {
+        // original caster guid only for GO cast
+        caster->CastSpell(std::move(targets), triggered_spell_id, args);
+    }, delay);
 }
 
 void Spell::EffectTriggerMissileSpell()
@@ -2621,31 +2628,39 @@ void Spell::EffectSummonPet()
         }
 
         if (owner->GetTypeId() == TYPEID_PLAYER)
-            owner->ToPlayer()->RemovePet(OldSummon, (OldSummon->getPetType() == HUNTER_PET ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT), false);
+            owner->ToPlayer()->RemovePet(OldSummon, PET_SAVE_NOT_IN_SLOT, false);
         else
             return;
     }
 
+    Optional<PetSaveMode> petSlot;
+    if (!petentry)
+        petSlot = PetSaveMode(damage);
+
     float x, y, z;
     owner->GetClosePoint(x, y, z, owner->GetCombatReach());
-    Pet* pet = owner->SummonPet(petentry, x, y, z, owner->GetOrientation(), SUMMON_PET, 0, true);
+    bool isNew = false;
+    Pet* pet = owner->SummonPet(petentry, petSlot, x, y, z, owner->GetOrientation(), 0, &isNew);
     if (!pet)
         return;
 
-    if (m_caster->GetTypeId() == TYPEID_UNIT)
+    if (isNew)
     {
-        if (m_caster->ToCreature()->IsTotem())
-            pet->SetReactState(REACT_AGGRESSIVE);
-        else
-            pet->SetReactState(REACT_DEFENSIVE);
+        if (m_caster->GetTypeId() == TYPEID_UNIT)
+        {
+            if (m_caster->ToCreature()->IsTotem())
+                pet->SetReactState(REACT_AGGRESSIVE);
+            else
+                pet->SetReactState(REACT_DEFENSIVE);
+        }
+
+        pet->SetCreatedBySpell(m_spellInfo->Id);
+
+        // generate new name for summon pet
+        std::string new_name = sObjectMgr->GeneratePetName(petentry);
+        if (!new_name.empty())
+            pet->SetName(new_name);
     }
-
-    pet->SetCreatedBySpell(m_spellInfo->Id);
-
-    // generate new name for summon pet
-    std::string new_name = sObjectMgr->GeneratePetName(petentry);
-    if (!new_name.empty())
-        pet->SetName(new_name);
 
     ExecuteLogEffectSummonObject(SpellEffectName(effectInfo->Effect), pet);
 }
@@ -3604,7 +3619,7 @@ void Spell::EffectDismissPet()
     Pet* pet = unitTarget->ToPet();
 
     ExecuteLogEffectUnsummonObject(SpellEffectName(effectInfo->Effect), pet);
-    pet->GetOwner()->RemovePet(pet, PET_SAVE_NOT_IN_SLOT);
+    pet->Remove(PET_SAVE_NOT_IN_SLOT);
 }
 
 void Spell::EffectSummonObject()
@@ -4252,9 +4267,17 @@ void Spell::EffectResurrectPet()
 
     if (!player->GetPet())
     {
+        PetStable const* petStable = player->GetPetStable();
+        auto deadPetItr = std::find_if(petStable->ActivePets.begin(), petStable->ActivePets.end(), [](Optional<PetStable::PetInfo> const& petInfo)
+        {
+            return petInfo && !petInfo->Health;
+        });
+
+        PetSaveMode slot = PetSaveMode(std::distance(petStable->ActivePets.begin(), deadPetItr));
+
         // Position passed to SummonPet is irrelevant with current implementation,
         // pet will be relocated without using these coords in Pet::LoadPetFromDB
-        player->SummonPet(0, 0.0f, 0.0f, 0.0f, 0.0f, SUMMON_PET, 0);
+        player->SummonPet(0, slot, 0.0f, 0.0f, 0.0f, 0.0f, 0);
         hadPet = false;
     }
 
