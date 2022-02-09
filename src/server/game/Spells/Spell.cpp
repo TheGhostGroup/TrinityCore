@@ -562,13 +562,16 @@ m_spellValue(new SpellValue(m_spellInfo, caster)), _spellEvent(nullptr)
     m_spellState = SPELL_STATE_NULL;
     _triggeredCastFlags = triggerFlags;
     if (info->HasAttribute(SPELL_ATTR4_CAN_CAST_WHILE_CASTING))
-        _triggeredCastFlags = TriggerCastFlags(uint32(_triggeredCastFlags) | TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_CAST_DIRECTLY);
+        _triggeredCastFlags = TriggerCastFlags(uint32(_triggeredCastFlags) | TRIGGERED_IGNORE_CAST_IN_PROGRESS);
 
     m_CastItem = nullptr;
     m_castItemGUID.Clear();
     m_castItemEntry = 0;
     m_castItemLevel = -1;
     m_castFlagsEx = 0;
+
+    if (IsIgnoringCooldowns())
+        m_castFlagsEx |= CAST_FLAG_EX_IGNORE_COOLDOWN;
 
     unitTarget = nullptr;
     itemTarget = nullptr;
@@ -2774,8 +2777,7 @@ void Spell::TargetInfo::DoDamageAndTriggers(Spell* spell)
 
         // Check for SPELL_ATTR7_INTERRUPT_ONLY_NONPLAYER
         if (MissCondition == SPELL_MISS_NONE && spell->m_spellInfo->HasAttribute(SPELL_ATTR7_INTERRUPT_ONLY_NONPLAYER) && unit->GetTypeId() != TYPEID_PLAYER)
-            caster->CastSpell(unit, SPELL_INTERRUPT_NONPLAYER, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
-                .SetOriginalCastId(spell->m_castId));
+            caster->CastSpell(unit, SPELL_INTERRUPT_NONPLAYER, spell);
     }
 
     if (_spellHitTarget)
@@ -3082,7 +3084,7 @@ void Spell::DoTriggersOnSpellHit(Unit* unit, uint32 effMask)
             if (CanExecuteTriggersOnHit(effMask, i->triggeredByAura) && roll_chance_i(i->chance))
             {
                 m_caster->CastSpell(unit, i->triggeredSpell->Id, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
-                    .SetOriginalCastId(m_castId)
+                    .SetTriggeringSpell(this)
                     .SetCastDifficulty(i->triggeredSpell->Difficulty));
                 TC_LOG_DEBUG("spells", "Spell %d triggered spell %d by SPELL_AURA_ADD_TARGET_TRIGGER aura", m_spellInfo->Id, i->triggeredSpell->Id);
 
@@ -3116,7 +3118,7 @@ void Spell::DoTriggersOnSpellHit(Unit* unit, uint32 effMask)
             else
                 unit->CastSpell(unit, *i, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
                     .SetOriginalCaster(m_caster->GetGUID())
-                    .SetOriginalCastId(m_castId));
+                    .SetTriggeringSpell(this));
         }
     }
 }
@@ -3336,6 +3338,12 @@ SpellCastResult Spell::prepare(SpellCastTargets const& targets, AuraEffect const
         cast(true);
     else
     {
+        // commented out !m_spellInfo->StartRecoveryTime, it forces instant spells with global cooldown to be processed in spell::update
+        // as a result a spell that passed CheckCast and should be processed instantly may suffer from this delayed process
+        // the easiest bug to observe is LoS check in AddUnitTarget, even if spell passed the CheckCast LoS check the situation can change in spell::update
+        // because target could be relocated in the meantime, making the spell fly to the air (no targets can be registered, so no effects processed, nothing in combat log)
+        bool willCastDirectly = !m_casttime && /*!m_spellInfo->StartRecoveryTime && */ GetCurrentContainer() == CURRENT_GENERIC_SPELL;
+
         if (Unit* unitCaster = m_caster->ToUnit())
         {
             // stealth must be removed at cast starting (at show channel bar)
@@ -3343,18 +3351,17 @@ SpellCastResult Spell::prepare(SpellCastTargets const& targets, AuraEffect const
             if (!(_triggeredCastFlags & TRIGGERED_IGNORE_AURA_INTERRUPT_FLAGS) && m_spellInfo->IsBreakingStealth() && !m_spellInfo->HasAttribute(SPELL_ATTR2_IGNORE_ACTION_AURA_INTERRUPT_FLAGS))
                 unitCaster->RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags::Action);
 
-            unitCaster->SetCurrentCastSpell(this);
+            // Do not register as current spell when requested to ignore cast in progress
+            // We don't want to interrupt that other spell with cast time
+            if (!willCastDirectly || !(_triggeredCastFlags & TRIGGERED_IGNORE_CAST_IN_PROGRESS))
+                unitCaster->SetCurrentCastSpell(this);
         }
         SendSpellStart();
 
         if (!(_triggeredCastFlags & TRIGGERED_IGNORE_GCD))
             TriggerGlobalCooldown();
 
-        // commented out !m_spellInfo->StartRecoveryTime, it forces instant spells with global cooldown to be processed in spell::update
-        // as a result a spell that passed CheckCast and should be processed instantly may suffer from this delayed process
-        // the easiest bug to observe is LoS check in AddUnitTarget, even if spell passed the CheckCast LoS check the situation can change in spell::update
-        // because target could be relocated in the meantime, making the spell fly to the air (no targets can be registered, so no effects processed, nothing in combat log)
-        if (!m_casttime && /*!m_spellInfo->StartRecoveryTime && */ GetCurrentContainer() == CURRENT_GENERIC_SPELL)
+        if (willCastDirectly)
             cast(true);
     }
 
@@ -3661,7 +3668,7 @@ void Spell::_cast(bool skipCheck)
             }
             else
                 m_caster->CastSpell(m_targets.GetUnitTarget() ? m_targets.GetUnitTarget() : m_caster, id, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
-                    .SetOriginalCastId(m_castId));
+                    .SetTriggeringSpell(this));
         }
     }
 
@@ -5988,7 +5995,7 @@ SpellCastResult Spell::CheckCast(bool strict, int32* param1 /*= nullptr*/, int32
                             if (Pet* pet = unitCaster->ToPlayer()->GetPet())
                                 pet->CastSpell(pet, 32752, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
                                     .SetOriginalCaster(pet->GetGUID())
-                                    .SetOriginalCastId(m_castId));
+                                    .SetTriggeringSpell(this));
                     }
                     else if (!m_spellInfo->HasAttribute(SPELL_ATTR1_DISMISS_PET))
                         return SPELL_FAILED_ALREADY_HAVE_SUMMON;
@@ -7180,7 +7187,7 @@ SpellCastResult Spell::CheckItems(int32* param1 /*= nullptr*/, int32* param2 /*=
                                 }
                                 else if (m_spellInfo->GetEffects().size() > EFFECT_1)
                                     player->CastSpell(player, m_spellInfo->GetEffect(EFFECT_1).CalcValue(), CastSpellExtraArgs()
-                                        .SetOriginalCastId(m_castId));        // move this to anywhere
+                                        .SetTriggeringSpell(this));        // move this to anywhere
                                 return SPELL_FAILED_DONT_REPORT;
                             }
                         }
@@ -8881,7 +8888,11 @@ CastSpellTargetArg::CastSpellTargetArg(WorldObject* target)
 
 CastSpellExtraArgs& CastSpellExtraArgs::SetTriggeringSpell(Spell const* triggeringSpell)
 {
-    OriginalCastId = triggeringSpell->m_castId;
+    if (triggeringSpell)
+    {
+        OriginalCastItemLevel = triggeringSpell->m_castItemLevel;
+        OriginalCastId = triggeringSpell->m_castId;
+    }
     return *this;
 }
 
