@@ -24,6 +24,7 @@
 #include "ObjectAccessor.h"
 #include "ScriptMgr.h"
 #include "ScriptedCreature.h"
+#include "Spell.h"
 #include "SpellAuras.h"
 #include "SpellScript.h"
 #include "SpellAuraEffects.h"
@@ -178,16 +179,16 @@ Position const AnnihilationCenterReferencePos = { -3296.72f, 9767.78f, -60.0f };
 
 struct boss_garothi_worldbreaker : public BossAI
 {
-    boss_garothi_worldbreaker(Creature* creature) : BossAI(creature, DATA_GAROTHI_WORLDBREAKER)
+    boss_garothi_worldbreaker(Creature* creature) : BossAI(creature, DATA_GAROTHI_WORLDBREAKER),
+        _apocalypseDriveCount(0), _searingBarrageSpellId(0), _lastCanonEntry(NPC_DECIMATOR), _castEradication(false)
     {
-        Initialize();
+        _apocalypseDriveHealthLimit = { };
+        SetCombatMovement(false);
         me->SetReactState(REACT_PASSIVE);
     }
 
-    void Initialize()
+    void InitializeAI() override
     {
-        SetCombatMovement(false);
-
         switch (GetDifficulty())
         {
             case DIFFICULTY_MYTHIC_RAID:
@@ -203,19 +204,10 @@ struct boss_garothi_worldbreaker : public BossAI
             default:
                 break;
         }
-
-        // Todo: move this section out of the ctor and remove the .clear call when dynamic spawns have been merged.
-        _apocalypseDriveCount = 0;
-        _searingBarrageSpellId = 0;
-        _lastCanonEntry = NPC_DECIMATOR;
-        _castEradication = false;
-        _surgingFelDummyGuids.clear();
     }
 
-    void Reset() override
+    void JustAppeared() override
     {
-        _Reset();
-        Initialize();
         me->SummonCreatureGroup(SUMMON_GROUP_ID_SURGING_FEL);
     }
 
@@ -243,7 +235,7 @@ struct boss_garothi_worldbreaker : public BossAI
     void KilledUnit(Unit* victim) override
     {
         if (victim->IsPlayer())
-            Talk(SAY_SLAY);
+            Talk(SAY_SLAY, victim);
     }
 
     void JustDied(Unit* /*killer*/) override
@@ -255,8 +247,11 @@ struct boss_garothi_worldbreaker : public BossAI
         instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
     }
 
-    void OnSuccessfulSpellCast(SpellInfo const* spell) override
+    void OnSpellCastFinished(SpellInfo const* spell, SpellFinishReason reason) override
     {
+        if (reason != SPELL_FINISHED_SUCCESSFUL_CAST)
+            return;
+
         switch (spell->Id)
         {
             case SPELL_APOCALYPSE_DRIVE_FINAL_DAMAGE:
@@ -438,7 +433,7 @@ struct boss_garothi_worldbreaker : public BossAI
             DoSpellAttackIfReady(SPELL_CARNAGE);
     }
  private:
-     uint8 _apocalypseDriveHealthLimit[MaxApocalypseDriveCount];
+     std::array<uint8, MaxApocalypseDriveCount> _apocalypseDriveHealthLimit;
      uint8 _apocalypseDriveCount;
      uint32 _searingBarrageSpellId;
      uint32 _lastCanonEntry;

@@ -435,9 +435,11 @@ struct TC_GAME_API InstanceSpawnGroupInfo
     enum
     {
         FLAG_ACTIVATE_SPAWN = 0x01,
-        FLAG_BLOCK_SPAWN = 0x02,
+        FLAG_BLOCK_SPAWN    = 0x02,
+        FLAG_ALLIANCE_ONLY  = 0x04,
+        FLAG_HORDE_ONLY     = 0x08,
 
-        FLAG_ALL = (FLAG_ACTIVATE_SPAWN | FLAG_BLOCK_SPAWN)
+        FLAG_ALL = (FLAG_ACTIVATE_SPAWN | FLAG_BLOCK_SPAWN | FLAG_ALLIANCE_ONLY | FLAG_HORDE_ONLY)
     };
     uint8 BossStateId;
     uint8 BossStates;
@@ -753,6 +755,7 @@ struct GossipMenuItems
     uint32              OptionBroadcastTextID;
     uint32              OptionType;
     uint32              OptionNpcFlag;
+    uint32              Language;
     uint32              ActionMenuID;
     uint32              ActionPoiID;
     bool                BoxCoded;
@@ -898,8 +901,8 @@ struct PlayerChoiceResponseReward
 struct PlayerChoiceResponseMawPower
 {
     int32 TypeArtFileID = 0;
-    int32 Rarity = 0;
-    uint32 RarityColor = 0;
+    Optional<int32> Rarity;
+    Optional<uint32> RarityColor;
     int32 SpellID = 0;
     int32 MaxStacks = 0;
 };
@@ -931,7 +934,10 @@ struct PlayerChoice
     int32 ChoiceId;
     int32 UiTextureKitId;
     uint32 SoundKitId;
+    uint32 CloseSoundKitId;
+    int64 Duration;
     std::string Question;
+    std::string PendingChoiceText;
     std::vector<PlayerChoiceResponse> Responses;
     bool HideWarboardHeader;
     bool KeepOpenAfterChoice;
@@ -940,6 +946,13 @@ struct PlayerChoice
     {
         auto itr = std::find_if(Responses.begin(), Responses.end(),
             [responseId](PlayerChoiceResponse const& playerChoiceResponse) { return playerChoiceResponse.ResponseId == responseId; });
+        return itr != Responses.end() ? &(*itr) : nullptr;
+    }
+
+    PlayerChoiceResponse const* GetResponseByIdentifier(int32 responseIdentifier) const
+    {
+        auto itr = std::find_if(Responses.begin(), Responses.end(),
+            [responseIdentifier](PlayerChoiceResponse const& playerChoiceResponse) { return playerChoiceResponse.ResponseIdentifier == responseIdentifier; });
         return itr != Responses.end() ? &(*itr) : nullptr;
     }
 };
@@ -1684,7 +1697,7 @@ class TC_GAME_API ObjectMgr
         GraveyardContainer GraveyardStore;
 
         static void AddLocaleString(std::string&& value, LocaleConstant localeConstant, std::vector<std::string>& data);
-        static std::string_view GetLocaleString(std::vector<std::string> const& data, size_t locale)
+        static std::string_view GetLocaleString(std::vector<std::string> const& data, LocaleConstant locale)
         {
             if (locale < data.size())
                 return data[locale];
@@ -1693,8 +1706,14 @@ class TC_GAME_API ObjectMgr
         }
         static void GetLocaleString(std::vector<std::string> const& data, LocaleConstant localeConstant, std::string& value)
         {
-            if (std::string_view str = GetLocaleString(data, static_cast<size_t>(localeConstant)); !str.empty())
+            if (std::string_view str = GetLocaleString(data, localeConstant); !str.empty())
                 value.assign(str);
+        }
+
+        static void GetLocaleString(std::vector<std::string> const& data, LocaleConstant localeConstant, std::string_view& value)
+        {
+            if (std::string_view str = GetLocaleString(data, localeConstant); !str.empty())
+                value = str;
         }
 
         CharacterConversionMap FactionChangeAchievements;
