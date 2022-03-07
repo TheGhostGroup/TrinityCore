@@ -21,6 +21,7 @@
 #include "Define.h"
 
 float const GROUND_HEIGHT_TOLERANCE = 0.05f; // Extra tolerance to z position to check if it is in air or on ground.
+constexpr float Z_OFFSET_FIND_HEIGHT = 0.5f;
 
 enum SpellEffIndex : uint8
 {
@@ -2525,15 +2526,14 @@ enum SpellImmunity
     MAX_SPELL_IMMUNITY
 };
 
-
 // target enum name consist of:
 // TARGET_[OBJECT_TYPE]_[REFERENCE_TYPE(skipped for caster)]_[SELECTION_TYPE(skipped for default)]_[additional specifiers(friendly, BACK_LEFT, etc.]
 enum Targets
 {
     TARGET_UNIT_CASTER                          = 1,
     TARGET_UNIT_NEARBY_ENEMY                    = 2,
-    TARGET_UNIT_NEARBY_PARTY                    = 3,
-    TARGET_UNIT_NEARBY_ALLY                     = 4,
+    TARGET_UNIT_NEARBY_ALLY                     = 3,
+    TARGET_UNIT_NEARBY_PARTY                    = 4,
     TARGET_UNIT_PET                             = 5,
     TARGET_UNIT_TARGET_ENEMY                    = 6,
     TARGET_UNIT_SRC_AREA_ENTRY                  = 7,
@@ -7820,7 +7820,6 @@ enum WorldState : uint32
     WS_BATTLEFIELD_TB_EAST_DAMAGED_ALLIANCE  = 5447,
     WS_BATTLEFIELD_TB_EAST_INTACT_NEUTRAL    = 5451,
     WS_BATTLEFIELD_TB_EAST_DAMAGED_NEUTRAL   = 5452,
-
 
     WS_CURRENCY_RESET_TIME      = 20001,                     // Next arena distribution time
     WS_WEEKLY_QUEST_RESET_TIME  = 20002,                     // Next weekly quest reset time

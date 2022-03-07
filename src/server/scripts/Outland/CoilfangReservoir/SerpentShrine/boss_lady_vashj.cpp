@@ -603,7 +603,6 @@ public:
 
         void MoveInLineOfSight(Unit* /*who*/) override { }
 
-
         void UpdateAI(uint32 diff) override
         {
             if (!VashjGUID)
@@ -847,12 +846,9 @@ public:
         {
             Initialize();
             me->SetDisplayId(11686); // invisible
-
-            me->AddUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
         }
 
         void MoveInLineOfSight(Unit* /*who*/) override { }
-
 
         void UpdateAI(uint32 diff) override
         {
