@@ -1376,14 +1376,14 @@ bool SpellInfo::HasTargetType(::Targets target) const
     return false;
 }
 
-bool SpellInfo::CanBeInterrupted(WorldObject const* interruptCaster, Unit const* interruptTarget) const
+bool SpellInfo::CanBeInterrupted(WorldObject const* interruptCaster, Unit const* interruptTarget, bool ignoreImmunity /*= false*/) const
 {
     return HasAttribute(SPELL_ATTR7_CAN_ALWAYS_BE_INTERRUPTED)
         || HasChannelInterruptFlag(SpellAuraInterruptFlags::Damage | SpellAuraInterruptFlags::EnteringCombat)
         || (interruptTarget->IsPlayer() && InterruptFlags.HasFlag(SpellInterruptFlags::DamageCancelsPlayerOnly))
         || InterruptFlags.HasFlag(SpellInterruptFlags::DamageCancels)
-        || (interruptCaster->IsUnit() && interruptCaster->ToUnit()->HasAuraTypeWithMiscvalue(SPELL_AURA_ALLOW_INTERRUPT_SPELL, Id))
-        || (!(interruptTarget->GetMechanicImmunityMask() & (1 << MECHANIC_INTERRUPT))
+        || (interruptCaster && interruptCaster->IsUnit() && interruptCaster->ToUnit()->HasAuraTypeWithMiscvalue(SPELL_AURA_ALLOW_INTERRUPT_SPELL, Id))
+        || ((!(interruptTarget->GetMechanicImmunityMask() & (1 << MECHANIC_INTERRUPT)) || ignoreImmunity)
             && !interruptTarget->HasAuraTypeWithAffectMask(SPELL_AURA_PREVENT_INTERRUPT, this)
             && PreventionType & SPELL_PREVENTION_TYPE_SILENCE);
 }
@@ -3551,7 +3551,13 @@ void SpellInfo::ApplyAllSpellImmunitiesTo(Unit* target, SpellEffectInfo const& s
                 target->ApplySpellImmune(Id, IMMUNITY_MECHANIC, i, apply);
 
         if (apply && HasAttribute(SPELL_ATTR1_DISPEL_AURAS_ON_IMMUNITY))
-            target->RemoveAurasWithMechanic(mechanicImmunity, AURA_REMOVE_BY_DEFAULT, Id);
+        {
+            // exception for purely snare mechanic (eg. hands of freedom)!
+            if (mechanicImmunity == (1 << MECHANIC_SNARE))
+                target->RemoveMovementImpairingAuras(false);
+            else
+                target->RemoveAurasWithMechanic(mechanicImmunity, AURA_REMOVE_BY_DEFAULT, Id);
+        }
     }
 
     if (uint32 dispelImmunity = immuneInfo.DispelImmune)
@@ -3721,6 +3727,23 @@ bool SpellInfo::SpellCancelsAuraEffect(AuraEffect const* aurEff) const
 uint32 SpellInfo::GetAllowedMechanicMask() const
 {
     return _allowedMechanicMask;
+}
+
+uint32 SpellInfo::GetMechanicImmunityMask(Unit const* caster) const
+{
+    uint32 casterMechanicImmunityMask = caster->GetMechanicImmunityMask();
+    uint32 mechanicImmunityMask = 0;
+
+    if (CanBeInterrupted(nullptr, caster, true))
+    {
+        if (casterMechanicImmunityMask & (1 << MECHANIC_SILENCE))
+            mechanicImmunityMask |= (1 << MECHANIC_SILENCE);
+
+        if (casterMechanicImmunityMask & (1 << MECHANIC_INTERRUPT))
+            mechanicImmunityMask |= (1 << MECHANIC_INTERRUPT);
+    }
+
+    return mechanicImmunityMask;
 }
 
 float SpellInfo::GetMinRange(bool positive /*= false*/) const
