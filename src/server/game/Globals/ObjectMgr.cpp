@@ -358,13 +358,13 @@ void ObjectMgr::LoadCreatureTemplates()
     //                                       "unit_class, unit_flags, unit_flags2, unit_flags3, dynamicflags, family, trainer_class, type, "
     //                                        36          37           38      39              40        41         42       43       44      45
     //                                       "type_flags, type_flags2, lootid, pickpocketloot, skinloot, VehicleId, mingold, maxgold, AIName, MovementType, "
-    //                                        46          47        48          49          50         51          52                         53              54                  55             56                 57             58              59
+    //                                        46          47        48          49          50         51          52                         53           54              55                   56            57                 58             59              60
     //                                       "ctm.Ground, ctm.Swim, ctm.Flight, ctm.Rooted, ctm.Chase, ctm.Random, ctm.InteractionPauseTimer, HoverHeight, HealthModifier, HealthModifierExtra, ManaModifier, ManaModifierExtra, ArmorModifier, DamageModifier, ExperienceModifier, "
-    //                                        60            61          62                    63           64                        65
+    //                                        61            62          63                    64           65                        66
     //                                       "RacialLeader, movementId, CreatureDifficultyID, WidgetSetID, WidgetSetUnitConditionID, RegenHealth, "
-    //                                        66                    67                        68
+    //                                        67                    68                        69
     //                                       "mechanic_immune_mask, spell_school_immune_mask, flags_extra, "
-    //                                        69
+    //                                        70
     //                                       "ScriptName FROM creature_template WHERE entry = ? OR 1 = ?");
 
     WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_TEMPLATE);
@@ -486,7 +486,7 @@ void ObjectMgr::LoadCreatureTemplate(Field* fields)
     creatureTemplate.ModManaExtra           = fields[57].GetFloat();
     creatureTemplate.ModArmor               = fields[58].GetFloat();
     creatureTemplate.ModDamage              = fields[59].GetFloat();
-    creatureTemplate.ModExperience          = fields[50].GetFloat();
+    creatureTemplate.ModExperience          = fields[60].GetFloat();
     creatureTemplate.RacialLeader           = fields[61].GetBool();
     creatureTemplate.movementId             = fields[62].GetUInt32();
     creatureTemplate.CreatureDifficultyID   = fields[63].GetInt32();
@@ -6094,8 +6094,8 @@ void ObjectMgr::LoadPageTexts()
 {
     uint32 oldMSTime = getMSTime();
 
-    //                                               0   1     2           3                  4
-    QueryResult result = WorldDatabase.Query("SELECT ID, Text, NextPageID, PlayerConditionID, Flags FROM page_text");
+    //                                               0    1     2           3                  4
+    QueryResult result = WorldDatabase.Query("SELECT ID, `Text`, NextPageID, PlayerConditionID, Flags FROM page_text");
     if (!result)
     {
         TC_LOG_INFO("server.loading", ">> Loaded 0 page texts. DB table `page_text` is empty!");
@@ -6142,8 +6142,8 @@ void ObjectMgr::LoadPageTextLocales()
 
     _pageTextLocaleStore.clear(); // needed for reload case
 
-    //                                               0      1     2
-    QueryResult result = WorldDatabase.Query("SELECT ID, locale, Text FROM page_text_locale");
+    //                                               0      1      2
+    QueryResult result = WorldDatabase.Query("SELECT ID, locale, `Text` FROM page_text_locale");
     if (!result)
         return;
 

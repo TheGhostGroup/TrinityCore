@@ -2559,8 +2559,8 @@ bool Creature::_IsTargetAcceptable(Unit const* target) const
 
     if (target->HasUnitState(UNIT_STATE_DIED))
     {
-        // guards can detect fake death
-        if (IsGuard() && target->HasUnitFlag2(UNIT_FLAG2_FEIGN_DEATH))
+        // some creatures can detect fake death
+        if (CanIgnoreFeignDeath() && target->HasUnitFlag2(UNIT_FLAG2_FEIGN_DEATH))
             return true;
         else
             return false;
@@ -3464,7 +3464,19 @@ void Creature::AtEngage(Unit* target)
 
     MovementGeneratorType const movetype = GetMotionMaster()->GetCurrentMovementGeneratorType();
     if (movetype == WAYPOINT_MOTION_TYPE || movetype == POINT_MOTION_TYPE || (IsAIEnabled() && AI()->IsEscorted()))
+    {
         SetHomePosition(GetPosition());
+
+        // if its a vehicle, set the home positon of every creature passenger at engage
+        // so that they are in combat range if hostile
+        if (Vehicle* vehicle = GetVehicleKit())
+        {
+            for (auto seat = vehicle->Seats.begin(); seat != vehicle->Seats.end(); ++seat)
+                if (Unit* passenger = ObjectAccessor::GetUnit(*this, seat->second.Passenger.Guid))
+                    if (Creature* creature = passenger->ToCreature())
+                        creature->SetHomePosition(GetPosition());
+        }
+    }
 
     if (CreatureAI* ai = AI())
         ai->JustEngagedWith(target);
@@ -3502,4 +3514,13 @@ std::string Creature::GetDebugInfo() const
         << "AIName: " << GetAIName() << " ScriptName: " << GetScriptName()
         << " WaypointPath: " << GetWaypointPath() << " SpawnId: " << GetSpawnId();
     return sstr.str();
+}
+
+void Creature::ExitVehicle(Position const* /*exitPosition*/)
+{
+    Unit::ExitVehicle();
+
+    // if the creature exits a vehicle, set it's home position to the
+    // exited position so it won't run away (home) and evade if it's hostile
+    SetHomePosition(GetPosition());
 }
