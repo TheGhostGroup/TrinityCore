@@ -577,6 +577,7 @@ struct npc_ymirjar_harpooner : public npc_skadi_trashAI
     }
 };
 
+// 47594 - Freezing Cloud
 class spell_freezing_cloud_area_right : public SpellScript
 {
     PrepareSpellScript(spell_freezing_cloud_area_right);
@@ -603,6 +604,7 @@ class spell_freezing_cloud_area_right : public SpellScript
     }
 };
 
+// 47574 - Freezing Cloud
 class spell_freezing_cloud_area_left : public SpellScript
 {
     PrepareSpellScript(spell_freezing_cloud_area_left);
@@ -629,6 +631,7 @@ class spell_freezing_cloud_area_left : public SpellScript
     }
 };
 
+// 47579, 60020 - Freezing Cloud
 class spell_freezing_cloud_damage : public AuraScript
 {
     PrepareAuraScript(spell_freezing_cloud_damage);
@@ -648,6 +651,7 @@ class spell_freezing_cloud_damage : public AuraScript
     }
 };
 
+// 49308 - Utgarde Pinnacle Guantlet Reset Check
 class spell_skadi_reset_check : public SpellScript
 {
     PrepareSpellScript(spell_skadi_reset_check);
@@ -682,6 +686,7 @@ private:
     uint32 _targetCount = 0;
 };
 
+// 48642 - Launch Harpoon
 class spell_skadi_launch_harpoon : public SpellScript
 {
     PrepareSpellScript(spell_skadi_launch_harpoon);
@@ -705,6 +710,7 @@ class spell_skadi_launch_harpoon : public SpellScript
     }
 };
 
+// 50255, 59331 - Poisoned Spear
 class spell_skadi_poisoned_spear : public SpellScript
 {
     PrepareSpellScript(spell_skadi_poisoned_spear);
@@ -747,6 +753,7 @@ class spell_skadi_ride_vehicle : public AuraScript
     }
 };
 
+// 59275 - Summon Gauntlet Mobs Periodic
 class spell_summon_gauntlet_mobs_periodic : public AuraScript
 {
     PrepareAuraScript(spell_summon_gauntlet_mobs_periodic);

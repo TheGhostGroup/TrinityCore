@@ -204,7 +204,7 @@ class spell_gen_animal_blood : public AuraScript
     }
 };
 
-// 63471 -Spawn Blood Pool
+// 63471 - Spawn Blood Pool
 class spell_spawn_blood_pool : public SpellScript
 {
     PrepareSpellScript(spell_spawn_blood_pool);
@@ -823,6 +823,23 @@ class spell_gen_chaos_blast : public SpellScript
     void Register() override
     {
         OnEffectHitTarget += SpellEffectFn(spell_gen_chaos_blast::HandleDummy, EFFECT_0, SPELL_EFFECT_DUMMY);
+    }
+};
+
+// 28471 - ClearAll
+class spell_clear_all : public SpellScript
+{
+    PrepareSpellScript(spell_clear_all);
+
+    void HandleScript(SpellEffIndex /*effIndex*/)
+    {
+        Unit* caster = GetCaster();
+        caster->RemoveAllAurasOnDeath();
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_clear_all::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
     }
 };
 
@@ -4313,7 +4330,6 @@ class spell_gen_vehicle_control_link : public AuraScript
     }
 };
 
-// 34779 - Freezing Circle
 enum FreezingCircleMisc
 {
     SPELL_FREEZING_CIRCLE_PIT_OF_SARON_NORMAL = 69574,
@@ -4323,6 +4339,7 @@ enum FreezingCircleMisc
     MAP_ID_BLOOD_IN_THE_SNOW_SCENARIO         = 1130
 };
 
+// 34779 - Freezing Circle
 class spell_freezing_circle : public SpellScript
 {
     PrepareSpellScript(spell_freezing_circle);
@@ -4768,6 +4785,7 @@ void AddSC_generic_spell_scripts()
     RegisterSpellScript(spell_gen_cannibalize);
     RegisterSpellScript(spell_gen_chains_of_ice);
     RegisterSpellScript(spell_gen_chaos_blast);
+    RegisterSpellScript(spell_clear_all);
     RegisterSpellScript(spell_gen_clone);
     RegisterSpellScript(spell_gen_clone_weapon);
     RegisterSpellScript(spell_gen_clone_weapon_aura);

@@ -8259,19 +8259,8 @@ void Unit::setDeathState(DeathState s)
         // Don't clear the movement if the Unit was on a vehicle as we are exiting now
         if (!isOnVehicle)
         {
-            if (IsInWorld())
-            {
-                // Only clear MotionMaster for entities that exists in world
-                // Avoids crashes in the following conditions :
-                //  * Using 'call pet' on dead pets
-                //  * Using 'call stabled pet'
-                //  * Logging in with dead pets
-                GetMotionMaster()->Clear();
-                GetMotionMaster()->MoveIdle();
-            }
-
-            StopMoving();
-            DisableSpline();
+            if (GetMotionMaster()->StopOnDeath())
+                DisableSpline();
         }
 
         // without this when removing IncreaseMaxHealth aura player may stuck with 1 hp
@@ -13458,6 +13447,18 @@ std::string Unit::GetDebugInfo() const
         << "IsAIEnabled: " << IsAIEnabled() << " DeathState: " << std::to_string(getDeathState())
         << " UnitMovementFlags: " << GetUnitMovementFlags() << " ExtraUnitMovementFlags: " << GetExtraUnitMovementFlags()
         << " Class: " << std::to_string(GetClass()) << "\n"
-        << " " << (movespline ? movespline->ToString() : "Movespline: <none>");
+        << "" << (movespline ? movespline->ToString() : "Movespline: <none>\n")
+        << "GetCharmedGUID(): " << GetCharmedGUID().ToString() << "\n"
+        << "GetCharmerGUID(): " << GetCharmerGUID().ToString() << "\n"
+        << "" << (GetVehicleKit() ? GetVehicleKit()->GetDebugInfo() : "No vehicle kit") << "\n"
+        << "m_Controlled size: " << m_Controlled.size();
+
+    size_t controlledCount = 0;
+    for (Unit* controlled : m_Controlled)
+    {
+        ++controlledCount;
+        sstr << "\n" << "m_Controlled " << controlledCount << " : " << controlled->GetGUID().ToString();
+    }
+
     return sstr.str();
 }

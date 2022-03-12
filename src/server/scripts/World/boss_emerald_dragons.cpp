@@ -717,6 +717,7 @@ class DreamFogTargetSelector
         }
 };
 
+// 24778 - Sleep
 class spell_dream_fog_sleep : public SpellScriptLoader
 {
     public:
@@ -761,6 +762,7 @@ class MarkOfNatureTargetSelector
         }
 };
 
+// 25042 - Triggerspell - Mark of Nature
 class spell_mark_of_nature : public SpellScriptLoader
 {
     public:
