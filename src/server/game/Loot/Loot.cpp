@@ -36,8 +36,9 @@
 // Constructor, copies most fields from LootStoreItem and generates random count
 LootItem::LootItem(LootStoreItem const& li)
 {
-    itemid      = li.itemid;
-    conditions   = li.conditions;
+    itemid = li.itemid;
+    itemIndex = 0;
+    conditions = li.conditions;
 
     ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemid);
     freeforall = proto && proto->HasFlag(ITEM_FLAG_MULTI_DROP);
@@ -304,6 +305,7 @@ void Loot::AddItem(LootStoreItem const& item)
         LootItem generatedLoot(item);
         generatedLoot.context = _itemContext;
         generatedLoot.count = std::min(count, proto->GetMaxStackSize());
+        generatedLoot.itemIndex = lootItems.size();
         if (_itemContext != ItemContext::NONE)
         {
             std::set<uint32> bonusListIDs = sDB2Manager.GetDefaultItemBonusTree(generatedLoot.itemid, _itemContext);

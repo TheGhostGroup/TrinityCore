@@ -313,14 +313,6 @@ struct SmartEvent
 
         struct
         {
-            uint32 spell;
-            uint32 count;
-            uint32 repeatMin;
-            uint32 repeatMax;
-        } targetAura;
-
-        struct
-        {
             uint32 type;
             uint32 id;
         } movementInform;
@@ -385,12 +377,6 @@ struct SmartEvent
 
         struct
         {
-            uint32 spell;
-            uint32 effIndex;
-        } dummy;
-
-        struct
-        {
             uint32 phasemask;
         } eventPhaseChange;
 
@@ -444,11 +430,6 @@ struct SmartEvent
             uint32 cooldownMin;
             uint32 cooldownMax;
         } counter;
-
-        struct
-        {
-            uint32 sceneId;
-        } scene;
 
         struct
         {
@@ -539,7 +520,7 @@ enum SMART_ACTION
     SMART_ACTION_WP_STOP                            = 55,     // despawnTime, quest, fail?
     SMART_ACTION_ADD_ITEM                           = 56,     // itemID, count
     SMART_ACTION_REMOVE_ITEM                        = 57,     // itemID, count
-    SMART_ACTION_INSTALL_AI_TEMPLATE                = 58,     // AITemplateID
+    // SMART_ACTION_UNUSED_58                       = 58,     // do not reuse
     SMART_ACTION_SET_RUN                            = 59,     // 0/1
     SMART_ACTION_SET_DISABLE_GRAVITY                = 60,     // 0/1
     SMART_ACTION_SET_SWIM                           = 61,     // 0/1
@@ -575,7 +556,7 @@ enum SMART_ACTION
     SMART_ACTION_REMOVE_UNIT_FIELD_BYTES_1          = 91,     // bytes, target
     SMART_ACTION_INTERRUPT_SPELL                    = 92,
     SMART_ACTION_SEND_GO_CUSTOM_ANIM                = 93,     // anim id
-    SMART_ACTION_SET_DYNAMIC_FLAG                   = 94,     // Flags
+    // SMART_ACTION_UNUSED_94                       = 94,     // do not reuse
     SMART_ACTION_ADD_DYNAMIC_FLAG                   = 95,     // Flags
     SMART_ACTION_REMOVE_DYNAMIC_FLAG                = 96,     // Flags
     SMART_ACTION_JUMP_TO_POS                        = 97,     // speedXY, speedZ, targetX, targetY, targetZ
@@ -660,6 +641,12 @@ struct SmartAction
 
         struct
         {
+            uint32 textGroupID;
+            uint32 duration;
+        } simpleTalk;
+
+        struct
+        {
             uint32 factionID;
         } faction;
 
@@ -739,23 +726,9 @@ struct SmartAction
 
         struct
         {
-            uint32 flag1;
-            uint32 flag2;
-            uint32 flag3;
-            uint32 flag4;
-            uint32 flag5;
-            uint32 flag6;
-        } addUnitFlag;
-
-        struct
-        {
-            uint32 flag1;
-            uint32 flag2;
-            uint32 flag3;
-            uint32 flag4;
-            uint32 flag5;
-            uint32 flag6;
-        } removeUnitFlag;
+            uint32 threatINC;
+            uint32 threatDEC;
+        } threat;
 
         struct
         {
@@ -777,6 +750,11 @@ struct SmartAction
             uint32 inc;
             uint32 dec;
         } incEventPhase;
+
+        struct
+        {
+            uint32 spell;
+        } addAura;
 
         struct
         {
@@ -926,16 +904,6 @@ struct SmartAction
 
         struct
         {
-            uint32 id;
-            uint32 param1;
-            uint32 param2;
-            uint32 param3;
-            uint32 param4;
-            uint32 param5;
-        } installTtemplate;
-
-        struct
-        {
             SAIBool run;
         } setRun;
 
@@ -965,12 +933,6 @@ struct SmartAction
             uint32 value;
             SAIBool reset;
         } setCounter;
-
-        struct
-        {
-            uint32 id;
-            uint32 number;
-        } storeVar;
 
         struct
         {
@@ -1009,6 +971,11 @@ struct SmartAction
 
         struct
         {
+            uint32 flag;
+        } flag;
+
+        struct
+        {
             uint32 byte1;
             uint32 type;
         } setunitByte;
@@ -1021,11 +988,6 @@ struct SmartAction
 
         struct
         {
-            uint32 seat;
-        } enterVehicle;
-
-        struct
-        {
             uint32 id;
             uint32 timerType;
             SAIBool allowOverride;
@@ -1035,6 +997,12 @@ struct SmartAction
         {
             uint32 actionLists[SMART_ACTION_PARAM_COUNT];
         } randTimedActionList;
+
+        struct
+        {
+            uint32 idMin;
+            uint32 idMax;
+        } randRangeTimedActionList;
 
         struct
         {
@@ -1101,7 +1069,7 @@ struct SmartAction
 
         struct
         {
-            uint32 regenHealth;
+            SAIBool regenHealth;
         } setHealthRegen;
 
         struct
@@ -1148,7 +1116,7 @@ struct SmartAction
 
         struct
         {
-            uint32 sounds[SMART_ACTION_PARAM_COUNT - 2];
+            uint32 sounds[4];
             SAIBool onlySelf;
             uint32 distance;
         } randomSound;
@@ -1306,17 +1274,6 @@ enum SMARTAI_SPAWN_FLAGS
     SMARTAI_SPAWN_FLAG_NOSAVE_RESPAWN       = 0x04,
 };
 
-enum SMARTAI_TEMPLATE
-{
-    SMARTAI_TEMPLATE_BASIC          = 0, //nothing is preset
-    SMARTAI_TEMPLATE_CASTER         = 1, //spellid, repeatMin, repeatMax, range, manaPCT +JOIN: target_param1 as castFlag
-    SMARTAI_TEMPLATE_TURRET         = 2, //spellid, repeatMin, repeatMax +JOIN: target_param1 as castFlag
-    SMARTAI_TEMPLATE_PASSIVE        = 3,
-    SMARTAI_TEMPLATE_CAGED_GO_PART  = 4, //creatureID, give credit at point end?,
-    SMARTAI_TEMPLATE_CAGED_NPC_PART = 5, //gameObjectID, despawntime, run?, dist, TextGroupID
-    SMARTAI_TEMPLATE_END            = 6
-};
-
 enum SMARTAI_TARGETS
 {
     SMART_TARGET_NONE                           = 0,    // NONE
@@ -1446,15 +1403,16 @@ struct SmartTarget
 
         struct
         {
-            uint32 map;
-        } position;
+            uint32 entry;
+            uint32 dist;
+            SAIBool dead;
+        } unitClosest;
 
         struct
         {
             uint32 entry;
             uint32 dist;
-            SAIBool dead;
-        } closest;
+        } goClosest;
 
         struct
         {
@@ -1475,16 +1433,21 @@ struct SmartTarget
 
         struct
         {
+            uint32 seatMask;
+        } vehicle;
+
+        struct
+        {
+            uint32 maxDist;
+        } threatList;
+
+        struct
+        {
             uint32 param1;
             uint32 param2;
             uint32 param3;
             uint32 param4;
         } raw;
-
-        struct
-        {
-            uint32 seatMask;
-        } vehicle;
     };
 };
 
@@ -1790,6 +1753,10 @@ class TC_GAME_API SmartAIMgr
         static bool IsAnimKitValid(SmartScriptHolder const& e, uint32 entry);
         static bool IsSpellVisualKitValid(SmartScriptHolder const& e, uint32 entry);
         static bool IsTextValid(SmartScriptHolder const& e, uint32 id);
+
+        static bool CheckUnusedEventParams(SmartScriptHolder const& e);
+        static bool CheckUnusedActionParams(SmartScriptHolder const& e);
+        static bool CheckUnusedTargetParams(SmartScriptHolder const& e);
 
         // Helpers
         void LoadHelperStores();

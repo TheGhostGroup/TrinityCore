@@ -347,6 +347,7 @@ struct boss_xt002 : public BossAI
                     break;
                 case EVENT_SUBMERGE:
                     DoCastSelf(SPELL_SUBMERGE);
+                    me->AddUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
                     Talk(EMOTE_HEART_OPENED);
                     if (Creature* heart = instance->GetCreature(DATA_XT002_HEART))
                         heart->AI()->DoAction(ACTION_START_PHASE_HEART);
@@ -585,7 +586,7 @@ struct npc_boombot : public ScriptedAI
             });
     }
 
-    void DamageTaken(Unit* /*who*/, uint32& damage) override
+    void DamageTaken(Unit* /*who*/, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override
     {
         if (damage >= (me->GetHealth() - me->GetMaxHealth() * 0.5f) && !_boomed)
         {
@@ -868,27 +869,6 @@ class spell_xt002_tympanic_tantrum : public SpellScript
     }
 };
 
-// 37751 - Submerged
-class spell_xt002_submerged : public SpellScript
-{
-    PrepareSpellScript(spell_xt002_submerged);
-
-    void HandleScript(SpellEffIndex /*eff*/)
-    {
-        Creature* target = GetHitCreature();
-        if (!target)
-            return;
-
-        target->AddUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
-        target->SetStandState(UNIT_STAND_STATE_SUBMERGED);
-    }
-
-    void Register() override
-    {
-        OnEffectHitTarget += SpellEffectFn(spell_xt002_submerged::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
-    }
-};
-
 // 65032 - 321-Boombot Aura
 class spell_xt002_321_boombot_aura : public AuraScript
 {
@@ -1015,7 +995,6 @@ void AddSC_boss_xt002()
     RegisterSpellScript(spell_xt002_heart_overload_periodic);
     RegisterSpellScript(spell_xt002_energy_orb);
     RegisterSpellScript(spell_xt002_tympanic_tantrum);
-    RegisterSpellScript(spell_xt002_submerged);
     RegisterSpellScript(spell_xt002_321_boombot_aura);
     RegisterSpellScript(spell_xt002_exposed_heart);
 

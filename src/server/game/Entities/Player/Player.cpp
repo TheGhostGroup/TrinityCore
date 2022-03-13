@@ -16931,7 +16931,7 @@ void Player::ItemAddedQuestCheck(uint32 entry, uint32 count)
     UpdateQuestObjectiveProgress(QUEST_OBJECTIVE_ITEM, entry, count);
 }
 
-void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
+void Player::ItemRemovedQuestCheck(uint32 entry, uint32 /*count*/)
 {
     for (QuestObjectiveStatusMap::value_type const& objectiveItr : Trinity::Containers::MapEqualRange(m_questObjectiveStatus, { QUEST_OBJECTIVE_ITEM, entry }))
     {
@@ -16943,11 +16943,7 @@ void Player::ItemRemovedQuestCheck(uint32 entry, uint32 count)
         if (!IsQuestObjectiveCompletable(logSlot, quest, objective))
             continue;
 
-        int32 curItemCount = GetQuestSlotObjectiveData(logSlot, objective);
-        if (curItemCount >= objective.Amount) // we may have more than what the status shows
-            curItemCount = GetItemCount(entry, false);
-
-        int32 newItemCount = (int32(count) > curItemCount) ? 0 : curItemCount - count;
+        int32 newItemCount = GetItemCount(entry, false);  // we may have more than what the status shows, so we have to iterate inventory
 
         if (newItemCount < objective.Amount)
         {
@@ -26610,7 +26606,7 @@ void Player::StoreLootItem(uint8 lootSlot, Loot* loot, AELootResult* aeResult/* 
 
         // LootItem is being removed (looted) from the container, delete it from the DB.
         if (!loot->containerID.IsEmpty())
-            sLootItemStorage->RemoveStoredLootItemForContainer(loot->containerID.GetCounter(), item->itemid, item->count);
+            sLootItemStorage->RemoveStoredLootItemForContainer(loot->containerID.GetCounter(), item->itemid, item->count, item->itemIndex);
     }
     else
         SendEquipError(msg, nullptr, nullptr, item->itemid);
