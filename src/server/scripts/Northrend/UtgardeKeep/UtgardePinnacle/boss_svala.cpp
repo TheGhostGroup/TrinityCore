@@ -156,7 +156,10 @@ struct boss_svala : public BossAI
         if (_introCompleted)
             events.SetPhase(NORMAL);
         else
+        {
             events.SetPhase(IDLE);
+            me->AddUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+        }
 
         me->SetDisableGravity(false);
 
@@ -193,7 +196,7 @@ struct boss_svala : public BossAI
 
             if (Creature* arthas = me->SummonCreature(NPC_ARTHAS, ArthasPos, TEMPSUMMON_MANUAL_DESPAWN))
             {
-                arthas->AddUnitFlag(UnitFlags(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_NOT_SELECTABLE));
+                arthas->AddUnitFlag(UnitFlags(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_UNINTERACTIBLE));
                 _arthasGUID = arthas->GetGUID();
             }
             events.ScheduleEvent(EVENT_INTRO_SVALA_TALK_0, 1s, 0, INTRO);
