@@ -35,12 +35,14 @@ void AddSC_boss_amanitar();
 void AddSC_boss_jedoga_shadowseeker();
 void AddSC_boss_volazj();
 void AddSC_instance_ahnkahet();
+void AddSC_ahnkahet();
 // Drak'Tharon Keep
 void AddSC_boss_trollgore();
 void AddSC_boss_novos();
 void AddSC_boss_king_dred();
 void AddSC_boss_tharon_ja();
 void AddSC_instance_drak_tharon_keep();
+void AddSC_drak_tharon_keep();
 // Trial of the Champion
 void AddSC_boss_argent_challenge();
 void AddSC_boss_black_knight();
@@ -226,6 +228,7 @@ void AddNorthrendScripts()
     AddSC_boss_jedoga_shadowseeker();
     AddSC_boss_volazj();
     AddSC_instance_ahnkahet();
+    AddSC_ahnkahet();
     // Azjol-Nerub - Azjol-Nerub
     AddSC_boss_krik_thir();
     AddSC_boss_hadronox();
@@ -237,6 +240,7 @@ void AddNorthrendScripts()
     AddSC_boss_king_dred();
     AddSC_boss_tharon_ja();
     AddSC_instance_drak_tharon_keep();
+    AddSC_drak_tharon_keep();
     // Trial of the Champion
     AddSC_boss_argent_challenge();
     AddSC_boss_black_knight();

@@ -1046,10 +1046,12 @@ void Battleground::AddPlayer(Player* player)
     bp.Team = team;
     bp.ActiveSpec = player->GetPrimarySpecialization();
 
+    bool const isInBattleground = IsPlayerInBattleground(player->GetGUID());
     // Add to list/maps
     m_Players[player->GetGUID()] = bp;
 
-    UpdatePlayersCountByTeam(team, false);                  // +1 player
+    if (!isInBattleground)
+        UpdatePlayersCountByTeam(team, false);                  // +1 player
 
     WorldPackets::Battleground::BattlegroundPlayerJoined playerJoined;
     playerJoined.Guid = player->GetGUID();
@@ -1119,7 +1121,8 @@ void Battleground::AddPlayer(Player* player)
     }
 
     // reset all map criterias on map enter
-    player->ResetCriteria(CriteriaFailEvent::LeaveBattleground, GetMapId(), true);
+    if (!isInBattleground)
+        player->ResetCriteria(CriteriaFailEvent::LeaveBattleground, GetMapId(), true);
 
     // setup BG group membership
     PlayerAddedToBGCheckIfBGIsRunning(player);
