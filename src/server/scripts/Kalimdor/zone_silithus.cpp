@@ -363,7 +363,7 @@ public:
         {
             Initialize();
 
-            me->AddUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
         }
 
         void HandleAnimation()
@@ -507,7 +507,7 @@ public:
                         DoCast(player, SPELL_ARCANE_CHANNELING, true);//Arcane Channeling
                         break;
                     case 35:
-                        me->CastSpell(Position{ -8088, 1520.43f, 2.67f }, SPELL_TIME_STOP, true);
+                        me->CastSpell(Position(-8088, 1520.43f, 2.67f), SPELL_TIME_STOP, true);
                         break;
                     case 36:
                         DoCast(player, SPELL_CALL_PRISMATIC_BARRIER, true);
@@ -557,7 +557,7 @@ public:
                         break;
                     case 50:
                         Fandral->AI()->Talk(FANDRAL_EMOTE_2);
-                        Fandral->CastSpell(Position{ -8127, 1525, 17.5f }, SPELL_THROW_HAMMER, true);
+                        Fandral->CastSpell(Position(-8127, 1525, 17.5f), SPELL_THROW_HAMMER, true);
                         break;
                     case 51:
                     {
@@ -985,7 +985,7 @@ public:
 
                     if (Merithra)
                     {
-                        Merithra->SetNpcFlags(UNIT_NPC_FLAG_NONE);
+                        Merithra->ReplaceAllNpcFlags(UNIT_NPC_FLAG_NONE);
                         Merithra->SetStandState(UNIT_STAND_STATE_STAND);
                         Merithra->SetDisplayId(MERITHRA_NIGHT_ELF_FORM);
                         Merithra->SetFaction(FACTION_FRIENDLY);
@@ -993,7 +993,7 @@ public:
 
                     if (Caelestrasz)
                     {
-                        Caelestrasz->SetNpcFlags(UNIT_NPC_FLAG_NONE);
+                        Caelestrasz->ReplaceAllNpcFlags(UNIT_NPC_FLAG_NONE);
                         Caelestrasz->SetStandState(UNIT_STAND_STATE_STAND);
                         Caelestrasz->SetDisplayId(CAELESTRASZ_NIGHT_ELF_FORM);
                         Caelestrasz->SetFaction(FACTION_FRIENDLY);
@@ -1001,7 +1001,7 @@ public:
 
                     if (Arygos)
                     {
-                        Arygos->SetNpcFlags(UNIT_NPC_FLAG_NONE);
+                        Arygos->ReplaceAllNpcFlags(UNIT_NPC_FLAG_NONE);
                         Arygos->SetStandState(UNIT_STAND_STATE_STAND);
                         Arygos->SetDisplayId(ARYGOS_GNOME_FORM);
                         Arygos->SetFaction(FACTION_FRIENDLY);
