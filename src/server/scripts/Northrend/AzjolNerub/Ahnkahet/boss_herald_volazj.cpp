@@ -144,8 +144,6 @@ struct boss_volazj : public BossAI
 
         Initialize();
 
-        instance->DoStopCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_QUICK_DEMISE_START_EVENT);
-
         // Visible for all players in insanity
         for (uint32 i = 173; i <= 177; ++i)
             PhasingHandler::AddPhase(me, i, false);
@@ -271,7 +269,7 @@ struct boss_volazj : public BossAI
         Talk(SAY_AGGRO);
         DoCastSelf(SPELL_WHISPER_AGGRO);
 
-        instance->DoStartCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_QUICK_DEMISE_START_EVENT);
+        instance->TriggerGameEvent(ACHIEV_QUICK_DEMISE_START_EVENT);
     }
 
     uint32 GetSpellForPhaseMask(uint32 phase)

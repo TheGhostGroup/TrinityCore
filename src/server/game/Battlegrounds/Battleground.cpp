@@ -25,6 +25,7 @@
 #include "DatabaseEnv.h"
 #include "DB2Stores.h"
 #include "Formulas.h"
+#include "GameEventSender.h"
 #include "GameTime.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
@@ -499,7 +500,7 @@ inline void Battleground::_ProcessJoin(uint32 diff)
                             return !aura->IsPermanent()
                                 && aura->GetDuration() <= 30 * IN_MILLISECONDS
                                 && aurApp->IsPositive()
-                                && !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR0_UNAFFECTED_BY_INVULNERABILITY)
+                                && !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR0_NO_IMMUNITIES)
                                 && !aura->HasEffectType(SPELL_AURA_MOD_INVISIBILITY);
                         });
                     }
@@ -1933,11 +1934,12 @@ WorldSafeLocsEntry const* Battleground::GetClosestGraveyard(Player* player)
     return sObjectMgr->GetClosestGraveyard(*player, GetPlayerTeam(player->GetGUID()), player);
 }
 
-void Battleground::StartCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry)
+void Battleground::TriggerGameEvent(uint32 gameEventId)
 {
+    GameEvents::TriggerForMap(gameEventId, GetBgMap());
     for (BattlegroundPlayerMap::const_iterator itr = GetPlayers().begin(); itr != GetPlayers().end(); ++itr)
         if (Player* player = ObjectAccessor::FindPlayer(itr->first))
-            player->StartCriteriaTimer(startEvent, entry);
+            GameEvents::TriggerForPlayer(gameEventId, player);
 }
 
 void Battleground::SetBracket(PVPDifficultyEntry const* bracketEntry)

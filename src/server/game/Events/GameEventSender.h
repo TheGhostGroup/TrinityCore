@@ -15,27 +15,20 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ZoneScript.h"
-#include "Creature.h"
-#include "GameEventSender.h"
+#ifndef GameEventSender_h__
+#define GameEventSender_h__
 
-ZoneScript::ZoneScript()
+#include "Define.h"
+
+class Map;
+class Player;
+class WorldObject;
+
+namespace GameEvents
 {
+TC_GAME_API void Trigger(uint32 gameEventId, WorldObject* source, WorldObject* target);
+TC_GAME_API void TriggerForPlayer(uint32 gameEventId, Player* source);
+TC_GAME_API void TriggerForMap(uint32 gameEventId, Map* map, WorldObject* source = nullptr, WorldObject* target = nullptr);
 }
 
-ZoneScript::~ZoneScript()
-{
-}
-
-uint32 ZoneScript::GetCreatureEntry(ObjectGuid::LowType /*guidLow*/, CreatureData const* data)
-{
-    return data->id;
-}
-
-void ZoneScript::TriggerGameEvent(uint32 gameEventId, WorldObject* source /*= nullptr*/, WorldObject* target /*= nullptr*/)
-{
-    if (source)
-        GameEvents::Trigger(gameEventId, source, target);
-    else
-        ProcessEvent(nullptr, gameEventId, nullptr);
-}
+#endif // GameEventSender_h__

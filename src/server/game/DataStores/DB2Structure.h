@@ -1227,6 +1227,8 @@ struct CriteriaEntry
     uint8 Flags;
     int16 EligibilityWorldStateID;
     int8 EligibilityWorldStateValue;
+
+    EnumFlag<CriteriaFlags> GetFlags() const { return static_cast<CriteriaFlags>(Flags); }
 };
 
 struct CriteriaTreeEntry
@@ -2520,6 +2522,7 @@ struct MapEntry
     bool IsBattleground() const { return InstanceType == MAP_BATTLEGROUND; }
     bool IsBattleArena() const { return InstanceType == MAP_ARENA; }
     bool IsBattlegroundOrArena() const { return InstanceType == MAP_BATTLEGROUND || InstanceType == MAP_ARENA; }
+    bool IsScenario() const { return InstanceType == MAP_SCENARIO; }
     bool IsWorldMap() const { return InstanceType == MAP_COMMON; }
 
     bool GetEntrancePos(int32& mapid, float& x, float& y) const

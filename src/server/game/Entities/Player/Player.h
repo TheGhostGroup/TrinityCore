@@ -2003,7 +2003,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void SendRaidGroupOnlyMessage(RaidGroupReason reason, int32 delay) const;
 
         bool UpdateSkillPro(uint16 skillId, int32 chance, uint32 step);
-        bool UpdateCraftSkill(uint32 spellid);
+        bool UpdateCraftSkill(SpellInfo const* spellInfo);
         bool UpdateGatherSkill(uint32 SkillId, uint32 SkillValue, uint32 RedLevel, uint32 Multiplicator = 1);
         bool UpdateFishingSkill();
 
@@ -2342,6 +2342,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void CastItemCombatSpell(DamageInfo const& damageInfo);
         void CastItemCombatSpell(DamageInfo const& damageInfo, Item* item, ItemTemplate const* proto);
         void CastItemUseSpell(Item* item, SpellCastTargets const& targets, ObjectGuid castCount, int32* misc);
+        void ApplyItemLootedSpell(Item* item, bool apply);
 
         void SendEquipmentSetList();
         void SetEquipmentSet(EquipmentSetInfo::EquipmentSetData const& newEqSet);

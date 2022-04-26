@@ -93,7 +93,6 @@ struct boss_loken : public BossAI
     {
         Initialize();
         _Reset();
-        instance->DoStopCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_TIMELY_DEATH_START_EVENT);
     }
 
     void JustEngagedWith(Unit* who) override
@@ -104,7 +103,7 @@ struct boss_loken : public BossAI
         events.ScheduleEvent(EVENT_ARC_LIGHTNING, 15s);
         events.ScheduleEvent(EVENT_LIGHTNING_NOVA, 20s);
         events.ScheduleEvent(EVENT_RESUME_PULSING_SHOCKWAVE, 1s);
-        instance->DoStartCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_TIMELY_DEATH_START_EVENT);
+        instance->TriggerGameEvent(ACHIEV_TIMELY_DEATH_START_EVENT);
     }
 
     void JustDied(Unit* /*killer*/) override

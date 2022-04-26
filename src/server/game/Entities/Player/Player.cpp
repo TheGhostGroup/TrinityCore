@@ -4492,6 +4492,9 @@ Corpse* Player::CreateCorpse()
     // register for player, but not show
     GetMap()->AddCorpse(corpse);
 
+    corpse->UpdatePositionData();
+    corpse->SetZoneScript();
+
     // we do not need to save corpses for BG/arenas
     if (!GetMap()->IsBattlegroundOrArena())
         corpse->SaveToDB();
@@ -5445,12 +5448,15 @@ inline int SkillGainChance(uint32 SkillValue, uint32 GrayLevel, uint32 GreenLeve
     return sWorld->getIntConfig(CONFIG_SKILL_CHANCE_ORANGE)*10;
 }
 
-bool Player::UpdateCraftSkill(uint32 spellid)
+bool Player::UpdateCraftSkill(SpellInfo const* spellInfo)
 {
-    TC_LOG_DEBUG("entities.player.skills", "Player::UpdateCraftSkill: Player '%s' (%s), SpellID: %d",
-        GetName().c_str(), GetGUID().ToString().c_str(), spellid);
+    if (spellInfo->HasAttribute(SPELL_ATTR1_NO_SKILL_INCREASE))
+        return false;
 
-    SkillLineAbilityMapBounds bounds = sSpellMgr->GetSkillLineAbilityMapBounds(spellid);
+    TC_LOG_DEBUG("entities.player.skills", "Player::UpdateCraftSkill: Player '%s' (%s), SpellID: %d",
+        GetName().c_str(), GetGUID().ToString().c_str(), spellInfo->Id);
+
+    SkillLineAbilityMapBounds bounds = sSpellMgr->GetSkillLineAbilityMapBounds(spellInfo->Id);
 
     for (SkillLineAbilityMap::const_iterator _spell_idx = bounds.first; _spell_idx != bounds.second; ++_spell_idx)
     {
@@ -5459,10 +5465,9 @@ bool Player::UpdateCraftSkill(uint32 spellid)
             uint32 SkillValue = GetPureSkillValue(_spell_idx->second->SkillupSkillLineID);
 
             // Alchemy Discoveries here
-            SpellInfo const* spellEntry = sSpellMgr->GetSpellInfo(spellid, DIFFICULTY_NONE);
-            if (spellEntry && spellEntry->Mechanic == MECHANIC_DISCOVERY)
+            if (spellInfo && spellInfo->Mechanic == MECHANIC_DISCOVERY)
             {
-                if (uint32 discoveredSpell = GetSkillDiscoverySpell(_spell_idx->second->SkillupSkillLineID, spellid, this))
+                if (uint32 discoveredSpell = GetSkillDiscoverySpell(_spell_idx->second->SkillupSkillLineID, spellInfo->Id, this))
                     LearnSpell(discoveredSpell, false);
             }
 
@@ -6185,8 +6190,8 @@ void Player::CheckAreaExploreAndOutdoor()
     if (IsInFlight())
         return;
 
-    if (sWorld->getBoolConfig(CONFIG_VMAP_INDOOR_CHECK) && !IsOutdoors())
-        RemoveAurasWithAttribute(SPELL_ATTR0_OUTDOORS_ONLY);
+    if (sWorld->getBoolConfig(CONFIG_VMAP_INDOOR_CHECK))
+        RemoveAurasWithAttribute(IsOutdoors() ? SPELL_ATTR0_ONLY_INDOORS : SPELL_ATTR0_ONLY_OUTDOORS);
 
     uint32 const areaId = GetAreaId();
     if (!areaId)
@@ -7892,7 +7897,7 @@ void Player::ApplyItemObtainSpells(Item* item, bool apply)
 
     for (ItemEffectEntry const* effect : item->GetEffects())
     {
-        if (effect->TriggerType != ITEM_SPELLTRIGGER_ON_OBTAIN) // On obtain trigger
+        if (effect->TriggerType != ITEM_SPELLTRIGGER_ON_PICKUP) // On obtain trigger
             continue;
 
         int32 const spellId = effect->SpellID;
@@ -8336,7 +8341,7 @@ void Player::CastItemCombatSpell(DamageInfo const& damageInfo, Item* item, ItemT
             for (ItemEffectEntry const* effectData : item->GetEffects())
             {
                 // wrong triggering type
-                if (effectData->TriggerType != ITEM_SPELLTRIGGER_CHANCE_ON_HIT)
+                if (effectData->TriggerType != ITEM_SPELLTRIGGER_ON_PROC)
                     continue;
 
                 SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(effectData->SpellID, DIFFICULTY_NONE);
@@ -8518,6 +8523,25 @@ void Player::CastItemUseSpell(Item* item, SpellCastTargets const& targets, Objec
             spell->prepare(targets);
             return;
         }
+    }
+}
+
+void Player::ApplyItemLootedSpell(Item* item, bool apply)
+{
+    if (item->GetTemplate()->HasFlag(ITEM_FLAG_LEGACY))
+        return;
+
+    auto lootedEffectItr = std::find_if(item->GetEffects().begin(), item->GetEffects().end(), [](ItemEffectEntry const* effectData)
+    {
+        return effectData->TriggerType == ITEM_SPELLTRIGGER_ON_LOOTED;
+    });
+
+    if (lootedEffectItr != item->GetEffects().end())
+    {
+        if (apply)
+            CastSpell(this, (*lootedEffectItr)->SpellID, item);
+        else
+            RemoveAurasDueToItemSpell((*lootedEffectItr)->SpellID, item->GetGUID());
     }
 }
 
@@ -12731,6 +12755,7 @@ void Player::DestroyItem(uint8 bag, uint8 slot, bool update)
         RemoveTradeableItem(pItem);
 
         ApplyItemObtainSpells(pItem, false);
+        ApplyItemLootedSpell(pItem, false);
 
         sScriptMgr->OnItemRemove(this, pItem);
 
@@ -26546,6 +26571,7 @@ void Player::AutoStoreLoot(uint8 bag, uint8 slot, uint32 loot_id, LootStore cons
 
         Item* pItem = StoreNewItem(dest, lootItem->itemid, true, lootItem->randomBonusListId, GuidSet(), lootItem->context, lootItem->BonusListIDs);
         SendNewItem(pItem, lootItem->count, false, createdByPlayer, broadcast);
+        ApplyItemLootedSpell(pItem, true);
     }
 
     Unit::ProcSkillsAndAuras(this, nullptr, PROC_FLAG_LOOTED, PROC_FLAG_NONE, PROC_SPELL_TYPE_MASK_ALL, PROC_SPELL_PHASE_NONE, PROC_HIT_NONE, nullptr, nullptr, nullptr);
@@ -26642,6 +26668,8 @@ void Player::StoreLootItem(uint8 lootSlot, Loot* loot, AELootResult* aeResult/* 
         // LootItem is being removed (looted) from the container, delete it from the DB.
         if (!loot->containerID.IsEmpty())
             sLootItemStorage->RemoveStoredLootItemForContainer(loot->containerID.GetCounter(), item->itemid, item->count, item->itemIndex);
+
+        ApplyItemLootedSpell(newitem, true);
     }
     else
         SendEquipError(msg, nullptr, nullptr, item->itemid);

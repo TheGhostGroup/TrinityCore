@@ -22,6 +22,7 @@
 #include "CreatureTextMgr.h"
 #include "CreatureTextMgrImpl.h"
 #include "GameEventMgr.h"
+#include "GameEventSender.h"
 #include "GameObject.h"
 #include "GossipDef.h"
 #include "GridNotifiersImpl.h"
@@ -2242,10 +2243,22 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                         target->ToCreature()->SetMeleeAnimKitId(e.action.animKit.animKit);
                     else if (e.action.animKit.type == 3)
                         target->ToCreature()->SetMovementAnimKitId(e.action.animKit.animKit);
-                    else
+
+                    TC_LOG_DEBUG("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_PLAY_ANIMKIT: target: %s (%s), AnimKit: %u, Type: %u",
+                        target->GetName().c_str(), target->GetGUID().ToString().c_str(), e.action.animKit.animKit, e.action.animKit.type);
+                }
+                else if (IsGameObject(target))
+                {
+                    switch (e.action.animKit.type)
                     {
-                        TC_LOG_ERROR("sql.sql", "SmartScript: Invalid type for SMART_ACTION_PLAY_ANIMKIT, skipping");
-                        break;
+                        case 0:
+                            target->ToGameObject()->SetAnimKitId(e.action.animKit.animKit, true);
+                            break;
+                        case 1:
+                            target->ToGameObject()->SetAnimKitId(e.action.animKit.animKit, false);
+                            break;
+                        default:
+                            break;
                     }
 
                     TC_LOG_DEBUG("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_PLAY_ANIMKIT: target: %s (%s), AnimKit: %u, Type: %u",
@@ -2453,6 +2466,19 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
 
             // action list will continue on personal clones
             Trinity::Containers::EraseIf(mTimedActionList, [e](SmartScriptHolder const& script) { return script.event_id > e.event_id; });
+            break;
+        }
+        case SMART_ACTION_TRIGGER_GAME_EVENT:
+        {
+            WorldObject* sourceObject = GetBaseObjectOrUnit(unit);
+            for (WorldObject* target : targets)
+            {
+                if (e.action.triggerGameEvent.useSaiTargetAsGameEventSource)
+                    GameEvents::Trigger(e.action.triggerGameEvent.eventId, target, sourceObject);
+                else
+                    GameEvents::Trigger(e.action.triggerGameEvent.eventId, sourceObject, target);
+            }
+
             break;
         }
         default:

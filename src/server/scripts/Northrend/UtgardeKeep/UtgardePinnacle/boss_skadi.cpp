@@ -166,8 +166,6 @@ struct boss_skadi : public BossAI
         me->SetReactState(REACT_PASSIVE);
         if (!instance->GetCreature(DATA_GRAUF))
             me->SummonCreature(NPC_GRAUF, GraufLoc);
-
-        instance->DoStopCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_LODI_DODI_WE_LOVES_THE_SKADI);
     }
 
     void EnterEvadeMode(EvadeReason /*why*/) override
@@ -231,7 +229,7 @@ struct boss_skadi : public BossAI
                 SpawnFirstWave();
                 Talk(SAY_AGGRO);
                 _phase = PHASE_FLYING;
-                instance->DoStartCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_LODI_DODI_WE_LOVES_THE_SKADI);
+                instance->TriggerGameEvent(ACHIEV_LODI_DODI_WE_LOVES_THE_SKADI);
 
                 scheduler
                     .Schedule(Seconds(6), [this](TaskContext resetCheck)

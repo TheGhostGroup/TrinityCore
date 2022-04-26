@@ -1066,7 +1066,7 @@ void AuraEffect::PeriodicTick(AuraApplication* aurApp, Unit* caster) const
 
     // Update serverside orientation of tracking channeled auras on periodic update ticks
     // exclude players because can turn during channeling and shouldn't desync orientation client/server
-    if (caster && !caster->IsPlayer() && m_spellInfo->IsChanneled() && m_spellInfo->HasAttribute(SPELL_ATTR1_CHANNEL_TRACK_TARGET) && caster->m_unitData->ChannelObjects.size())
+    if (caster && !caster->IsPlayer() && m_spellInfo->IsChanneled() && m_spellInfo->HasAttribute(SPELL_ATTR1_TRACK_TARGET_IN_CHANNEL) && caster->m_unitData->ChannelObjects.size())
     {
         ObjectGuid const channelGuid = caster->m_unitData->ChannelObjects[0];
         if (channelGuid != caster->GetGUID())
@@ -1348,7 +1348,7 @@ void AuraEffect::HandleShapeshiftBoosts(Unit* target, bool apply) const
                     continue;
 
                 SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(itr->first, DIFFICULTY_NONE);
-                if (!spellInfo || !(spellInfo->IsPassive() || spellInfo->HasAttribute(SPELL_ATTR0_HIDDEN_CLIENTSIDE)))
+                if (!spellInfo || !(spellInfo->IsPassive() || spellInfo->HasAttribute(SPELL_ATTR0_DO_NOT_DISPLAY_SPELLBOOK_AURA_ICON_COMBAT_LOG)))
                     continue;
 
                 if (spellInfo->Stances & (UI64LIT(1) << (GetMiscValue() - 1)))
@@ -3217,7 +3217,7 @@ void AuraEffect::HandleAuraModSchoolImmunity(AuraApplication const* aurApp, uint
             target->RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags::StealthOrInvis);
 
         // remove all flag auras (they are positive, but they must be removed when you are immune)
-        if (GetSpellInfo()->HasAttribute(SPELL_ATTR1_DISPEL_AURAS_ON_IMMUNITY)
+        if (GetSpellInfo()->HasAttribute(SPELL_ATTR1_IMMUNITY_PURGES_EFFECT)
             && GetSpellInfo()->HasAttribute(SPELL_ATTR2_DAMAGE_REDUCED_SHIELD))
             target->RemoveAurasWithInterruptFlags(SpellAuraInterruptFlags::StealthOrInvis);
     }
@@ -3557,7 +3557,7 @@ void AuraEffect::HandleModTotalPercentStat(AuraApplication const* aurApp, uint8 
 
     // recalculate current HP/MP after applying aura modifications (only for spells with SPELL_ATTR0_ABILITY 0x00000010 flag)
     // this check is total bullshit i think
-    if ((GetMiscValueB() & 1 << STAT_STAMINA || !GetMiscValueB()) && (m_spellInfo->HasAttribute(SPELL_ATTR0_ABILITY)))
+    if ((GetMiscValueB() & 1 << STAT_STAMINA || !GetMiscValueB()) && (m_spellInfo->HasAttribute(SPELL_ATTR0_IS_ABILITY)))
         target->SetHealth(std::max<uint32>(CalculatePct(target->GetMaxHealth(), healthPct), (zeroHealth ? 0 : 1)));
 }
 

@@ -376,7 +376,6 @@ struct boss_malygos : public BossAI
 
         SetPhase(PHASE_NOT_STARTED, true);
         me->SetReactState(REACT_PASSIVE);
-        instance->DoStopCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_TIMED_START_EVENT);
         instance->SetBossState(DATA_MALYGOS_EVENT, NOT_STARTED);
     }
 
@@ -568,7 +567,7 @@ struct boss_malygos : public BossAI
 
         Talk(SAY_START_P_ONE);
         DoCast(SPELL_BERSERK); // periodic aura, first tick in 10 minutes
-        instance->DoStartCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_TIMED_START_EVENT);
+        instance->TriggerGameEvent(ACHIEV_TIMED_START_EVENT);
     }
 
     void EnterEvadeMode(EvadeReason /*why*/) override

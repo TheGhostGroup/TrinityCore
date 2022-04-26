@@ -35,6 +35,7 @@
 #include "DB2Stores.h"
 #include "DuelPackets.h"
 #include "DynamicObject.h"
+#include "GameEventSender.h"
 #include "GameObject.h"
 #include "GameObjectAI.h"
 #include "GameTime.h"
@@ -54,7 +55,6 @@
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
-#include "Opcodes.h"
 #include "OutdoorPvPMgr.h"
 #include "PathGenerator.h"
 #include "Pet.h"
@@ -1072,12 +1072,7 @@ void Spell::EffectSendEvent()
 
     TC_LOG_DEBUG("spells", "Spell ScriptStart %u for spellid %u in EffectSendEvent ", effectInfo->MiscValue, m_spellInfo->Id);
 
-    if (ZoneScript* zoneScript = m_caster->GetZoneScript())
-        zoneScript->ProcessEvent(target, effectInfo->MiscValue, m_caster);
-    else if (InstanceScript* instanceScript = m_caster->GetInstanceScript())    // needed in case Player is the caster
-        instanceScript->ProcessEvent(target, effectInfo->MiscValue, m_caster);
-
-    m_caster->GetMap()->ScriptsStart(sEventScripts, effectInfo->MiscValue, m_caster, target);
+    GameEvents::Trigger(effectInfo->MiscValue, m_caster, target);
 }
 
 void Spell::EffectPowerBurn()
@@ -1329,7 +1324,7 @@ void Spell::DoCreateItem(uint32 itemId, ItemContext context /*= ItemContext::NON
                 guild->AddGuildNews(GUILD_NEWS_ITEM_CRAFTED, player->GetGUID(), 0, pProto->GetId());
 
         // we succeeded in creating at least one item, so a levelup is possible
-        player->UpdateCraftSkill(m_spellInfo->Id);
+        player->UpdateCraftSkill(m_spellInfo);
     }
 }
 
@@ -1338,7 +1333,7 @@ void Spell::EffectCreateItem()
     if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
         return;
 
-    DoCreateItem(effectInfo->ItemType, m_spellInfo->HasAttribute(SPELL_ATTR0_TRADESPELL) ? ItemContext::Trade_Skill : ItemContext::NONE);
+    DoCreateItem(effectInfo->ItemType, m_spellInfo->HasAttribute(SPELL_ATTR0_IS_TRADESKILL) ? ItemContext::Trade_Skill : ItemContext::NONE);
     ExecuteLogEffectCreateItem(SpellEffectName(effectInfo->Effect), effectInfo->ItemType);
 }
 
@@ -1352,13 +1347,13 @@ void Spell::EffectCreateItem2()
 
     Player* player = unitTarget->ToPlayer();
 
-    ItemContext context = m_spellInfo->HasAttribute(SPELL_ATTR0_TRADESPELL) ? ItemContext::Trade_Skill : ItemContext::NONE;
+    ItemContext context = m_spellInfo->HasAttribute(SPELL_ATTR0_IS_TRADESKILL) ? ItemContext::Trade_Skill : ItemContext::NONE;
 
     // Pick a random item from spell_loot_template
     if (m_spellInfo->IsLootCrafting())
     {
         player->AutoStoreLoot(m_spellInfo->Id, LootTemplates_Spell, context, false, true);
-        player->UpdateCraftSkill(m_spellInfo->Id);
+        player->UpdateCraftSkill(m_spellInfo);
     }
     else // If there's no random loot entries for this spell, pick the item associated with this spell
     {
@@ -1381,7 +1376,7 @@ void Spell::EffectCreateRandomItem()
     Player* player = unitTarget->ToPlayer();
 
     // create some random items
-    player->AutoStoreLoot(m_spellInfo->Id, LootTemplates_Spell, m_spellInfo->HasAttribute(SPELL_ATTR0_TRADESPELL) ? ItemContext::Trade_Skill : ItemContext::NONE);
+    player->AutoStoreLoot(m_spellInfo->Id, LootTemplates_Spell, m_spellInfo->HasAttribute(SPELL_ATTR0_IS_TRADESKILL) ? ItemContext::Trade_Skill : ItemContext::NONE);
     /// @todo ExecuteLogEffectCreateItem(i, m_spellInfo->Effects[i].ItemType);
 }
 
@@ -1549,7 +1544,7 @@ void Spell::SendLoot(ObjectGuid guid, LootType loottype)
                 if (gameObjTarget->GetGOInfo()->chest.triggeredEvent)
                 {
                     TC_LOG_DEBUG("spells", "Chest ScriptStart id %u for GO " UI64FMTD, gameObjTarget->GetGOInfo()->chest.triggeredEvent, gameObjTarget->GetSpawnId());
-                    player->GetMap()->ScriptsStart(sEventScripts, gameObjTarget->GetGOInfo()->chest.triggeredEvent, player, gameObjTarget);
+                    GameEvents::Trigger(gameObjTarget->GetGOInfo()->chest.triggeredEvent, player, gameObjTarget);
                 }
 
                 // triggering linked GO
@@ -2066,7 +2061,7 @@ void Spell::EffectLearnSpell()
     {
         for (ItemEffectEntry const* itemEffect : m_CastItem->GetEffects())
         {
-            if (itemEffect->TriggerType != ITEM_SPELLTRIGGER_LEARN_SPELL_ID)
+            if (itemEffect->TriggerType != ITEM_SPELLTRIGGER_ON_LEARN)
                 continue;
 
             bool dependent = false;
@@ -2137,12 +2132,16 @@ void Spell::EffectDispel()
                 return false;
             });
 
+            uint8 dispelledCharges = 1;
+            if (itr->GetAura()->GetSpellInfo()->HasAttribute(SPELL_ATTR1_DISPEL_ALL_STACKS))
+                dispelledCharges = itr->GetDispelCharges();
+
             if (successItr == successList.end())
-                successList.emplace_back(itr->GetAura(), 0, 1);
+                successList.emplace_back(itr->GetAura(), 0, dispelledCharges);
             else
                 successItr->IncrementCharges();
 
-            if (!itr->DecrementCharge())
+            if (!itr->DecrementCharge(dispelledCharges))
             {
                 --remaining;
                 std::swap(*itr, dispelList[remaining]);
@@ -2351,7 +2350,7 @@ void Spell::EffectEnchantItemPerm()
         unitTarget = player;
         // and add a scroll
         damage = 1;
-        DoCreateItem(effectInfo->ItemType, m_spellInfo->HasAttribute(SPELL_ATTR0_TRADESPELL) ? ItemContext::Trade_Skill : ItemContext::NONE);
+        DoCreateItem(effectInfo->ItemType, m_spellInfo->HasAttribute(SPELL_ATTR0_IS_TRADESKILL) ? ItemContext::Trade_Skill : ItemContext::NONE);
         itemTarget = nullptr;
         m_targets.SetItemTarget(nullptr);
     }
@@ -2359,7 +2358,7 @@ void Spell::EffectEnchantItemPerm()
     {
         // do not increase skill if vellum used
         if (!(m_CastItem && m_CastItem->GetTemplate()->HasFlag(ITEM_FLAG_NO_REAGENT_COST)))
-            player->UpdateCraftSkill(m_spellInfo->Id);
+            player->UpdateCraftSkill(m_spellInfo);
 
         uint32 enchant_id = effectInfo->MiscValue;
         if (!enchant_id)
@@ -3421,7 +3420,7 @@ void Spell::EffectDisEnchant()
 
     if (Player* caster = m_caster->ToPlayer())
     {
-        caster->UpdateCraftSkill(m_spellInfo->Id);
+        caster->UpdateCraftSkill(m_spellInfo);
         caster->SendLoot(itemTarget->GetGUID(), LOOT_DISENCHANTING);
     }
 
@@ -4610,7 +4609,7 @@ void Spell::EffectStealBeneficialBuff()
 
     // Ok if exist some buffs for dispel try dispel it
     uint32 failCount = 0;
-    DispelList successList;
+    std::vector<std::tuple<uint32, ObjectGuid, int32>> successList;
     successList.reserve(damage);
 
     WorldPackets::Spells::DispelFailed dispelFailed;
@@ -4627,8 +4626,12 @@ void Spell::EffectStealBeneficialBuff()
 
         if (itr->RollDispel())
         {
-            successList.emplace_back(itr->GetAura()->GetId(), itr->GetAura()->GetCasterGUID());
-            if (!itr->DecrementCharge())
+            uint8 stolenCharges = 1;
+            if (itr->GetAura()->GetSpellInfo()->HasAttribute(SPELL_ATTR1_DISPEL_ALL_STACKS))
+                stolenCharges = itr->GetDispelCharges();
+
+            successList.emplace_back(itr->GetAura()->GetId(), itr->GetAura()->GetCasterGUID(), int32(stolenCharges));
+            if (!itr->DecrementCharge(stolenCharges))
             {
                 --remaining;
                 std::swap(*itr, stealList[remaining]);
@@ -4656,13 +4659,13 @@ void Spell::EffectStealBeneficialBuff()
     spellDispellLog.CasterGUID = m_caster->GetGUID();
     spellDispellLog.DispelledBySpellID = m_spellInfo->Id;
 
-    for (std::pair<uint32, ObjectGuid> const& dispell : successList)
+    for (auto const& [spellId, auraCaster, stolenCharges] : successList)
     {
         WorldPackets::CombatLog::SpellDispellData dispellData;
-        dispellData.SpellID = dispell.first;
+        dispellData.SpellID = spellId;
         dispellData.Harmful = false;      // TODO: use me
 
-        unitTarget->RemoveAurasDueToSpellBySteal(dispell.first, dispell.second, m_caster);
+        unitTarget->RemoveAurasDueToSpellBySteal(spellId, auraCaster, m_caster, stolenCharges);
 
         spellDispellLog.DispellData.emplace_back(dispellData);
     }
