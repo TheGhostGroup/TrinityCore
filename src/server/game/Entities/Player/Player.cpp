@@ -3132,7 +3132,7 @@ bool Player::HandlePassiveSpellLearn(SpellInfo const* spellInfo)
     // talent dependent passives activated at form apply have proper stance data
     ShapeshiftForm form = GetShapeshiftForm();
     bool need_cast = (!spellInfo->Stances || (form && (spellInfo->Stances & (UI64LIT(1) << (form - 1)))) ||
-        (!form && (spellInfo->HasAttribute(SPELL_ATTR2_NOT_NEED_SHAPESHIFT))));
+        (!form && (spellInfo->HasAttribute(SPELL_ATTR2_ALLOW_WHILE_NOT_SHAPESHIFTED_CASTER_FORM))));
 
     // Check EquippedItemClass
     // passive spells which apply aura and have an item requirement are to be added manually, instead of casted
@@ -5465,7 +5465,7 @@ bool Player::UpdateCraftSkill(SpellInfo const* spellInfo)
             uint32 SkillValue = GetPureSkillValue(_spell_idx->second->SkillupSkillLineID);
 
             // Alchemy Discoveries here
-            if (spellInfo && spellInfo->Mechanic == MECHANIC_DISCOVERY)
+            if (spellInfo->Mechanic == MECHANIC_DISCOVERY)
             {
                 if (uint32 discoveredSpell = GetSkillDiscoverySpell(_spell_idx->second->SkillupSkillLineID, spellInfo->Id, this))
                     LearnSpell(discoveredSpell, false);
@@ -22329,6 +22329,9 @@ void Player::VehicleSpellInitialize()
         if (!spellInfo)
             continue;
 
+        if (spellInfo->HasAttribute(SPELL_ATTR5_NOT_AVAILABLE_WHILE_CHARMED))
+            continue;
+
         if (!sConditionMgr->IsObjectMeetingVehicleSpellConditions(vehicle->GetEntry(), spellId, this, vehicle))
         {
             TC_LOG_DEBUG("condition", "Player::VehicleSpellInitialize: Player '%s' (%s) doesn't meet conditions for vehicle (Entry: %u, Spell: %u)",
@@ -24758,7 +24761,7 @@ void Player::ApplyEquipCooldown(Item* pItem)
                 continue;
 
             if (Aura* itemAura = GetAura(effectData->SpellID, GetGUID(), pItem->GetGUID()))
-                itemAura->AddProcCooldown(now + procEntry->Cooldown);
+                itemAura->AddProcCooldown(procEntry, now);
             continue;
         }
 
@@ -25665,7 +25668,7 @@ bool Player::HasItemFitToSpellRequirements(SpellInfo const* spellInfo, Item cons
 bool Player::CanNoReagentCast(SpellInfo const* spellInfo) const
 {
     // don't take reagents for spells with SPELL_ATTR5_NO_REAGENT_WHILE_PREP
-    if (spellInfo->HasAttribute(SPELL_ATTR5_NO_REAGENT_WHILE_PREP) &&
+    if (spellInfo->HasAttribute(SPELL_ATTR5_NO_REAGENT_COST_WITH_AURA) &&
         HasUnitFlag(UNIT_FLAG_PREPARATION))
         return true;
 

@@ -302,7 +302,7 @@ void ThreatManager::AddThreat(Unit* target, float amount, SpellInfo const* spell
     {
         if (spell->HasAttribute(SPELL_ATTR1_NO_THREAT))
             return;
-        if (!_owner->IsEngaged() && spell->HasAttribute(SPELL_ATTR3_NO_INITIAL_AGGRO))
+        if (!_owner->IsEngaged() && spell->HasAttribute(SPELL_ATTR2_NO_INITIAL_THREAT))
             return;
     }
 
@@ -661,7 +661,7 @@ void ThreatManager::ProcessAIUpdates()
 
 void ThreatManager::ForwardThreatForAssistingMe(Unit* assistant, float baseAmount, SpellInfo const* spell, bool ignoreModifiers)
 {
-    if (spell && spell->HasAttribute(SPELL_ATTR1_NO_THREAT)) // shortcut, none of the calls would do anything
+    if (spell && (spell->HasAttribute(SPELL_ATTR1_NO_THREAT) || spell->HasAttribute(SPELL_ATTR4_NO_HELPFUL_THREAT))) // shortcut, none of the calls would do anything
         return;
     if (_threatenedByMe.empty())
         return;

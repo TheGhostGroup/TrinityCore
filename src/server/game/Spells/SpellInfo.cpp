@@ -1569,7 +1569,7 @@ bool SpellInfo::IsMultiSlotAura() const
 bool SpellInfo::IsStackableOnOneSlotWithDifferentCasters() const
 {
     /// TODO: Re-verify meaning of SPELL_ATTR3_STACK_FOR_DIFF_CASTERS and update conditions here
-    return StackAmount > 1 && !IsChanneled() && !HasAttribute(SPELL_ATTR3_STACK_FOR_DIFF_CASTERS);
+    return StackAmount > 1 && !IsChanneled() && !HasAttribute(SPELL_ATTR3_DOT_STACKING_RULE);
 }
 
 bool SpellInfo::IsCooldownStartedOnEvent() const
@@ -1583,17 +1583,17 @@ bool SpellInfo::IsCooldownStartedOnEvent() const
 
 bool SpellInfo::IsDeathPersistent() const
 {
-    return HasAttribute(SPELL_ATTR3_DEATH_PERSISTENT);
+    return HasAttribute(SPELL_ATTR3_ALLOW_AURA_WHILE_DEAD);
 }
 
 bool SpellInfo::IsRequiringDeadTarget() const
 {
-    return HasAttribute(SPELL_ATTR3_ONLY_TARGET_GHOSTS);
+    return HasAttribute(SPELL_ATTR3_ONLY_ON_GHOSTS);
 }
 
 bool SpellInfo::IsAllowingDeadTarget() const
 {
-    if (HasAttribute(SPELL_ATTR2_CAN_TARGET_DEAD) || Targets & (TARGET_FLAG_CORPSE_ALLY | TARGET_FLAG_CORPSE_ENEMY | TARGET_FLAG_UNIT_DEAD))
+    if (HasAttribute(SPELL_ATTR2_ALLOW_DEAD_TARGET) || Targets & (TARGET_FLAG_CORPSE_ALLY | TARGET_FLAG_CORPSE_ENEMY | TARGET_FLAG_UNIT_DEAD))
         return true;
 
     for (SpellEffectInfo const& effect : GetEffects())
@@ -1648,7 +1648,7 @@ bool SpellInfo::IsChanneled() const
 
 bool SpellInfo::IsMoveAllowedChannel() const
 {
-    return IsChanneled() && (HasAttribute(SPELL_ATTR5_CAN_CHANNEL_WHEN_MOVING) || !ChannelInterruptFlags.HasFlag(SpellAuraInterruptFlags::Moving | SpellAuraInterruptFlags::Turning));
+    return IsChanneled() && !ChannelInterruptFlags.HasFlag(SpellAuraInterruptFlags::Moving | SpellAuraInterruptFlags::Turning);
 }
 
 bool SpellInfo::NeedsComboPoints() const
@@ -1661,11 +1661,6 @@ bool SpellInfo::IsNextMeleeSwingSpell() const
     return HasAttribute(SpellAttr0(SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE | SPELL_ATTR0_ON_NEXT_SWING));
 }
 
-bool SpellInfo::IsBreakingStealth() const
-{
-    return !HasAttribute(SPELL_ATTR1_ALLOW_WHILE_STEALTHED);
-}
-
 bool SpellInfo::IsRangedWeaponSpell() const
 {
     return (SpellFamilyName == SPELLFAMILY_HUNTER && !(SpellFamilyFlags[1] & 0x10000000)) // for 53352, cannot find better way
@@ -1675,12 +1670,12 @@ bool SpellInfo::IsRangedWeaponSpell() const
 
 bool SpellInfo::IsAutoRepeatRangedSpell() const
 {
-    return HasAttribute(SPELL_ATTR2_AUTOREPEAT_FLAG);
+    return HasAttribute(SPELL_ATTR2_AUTO_REPEAT);
 }
 
 bool SpellInfo::HasInitialAggro() const
 {
-    return !(HasAttribute(SPELL_ATTR1_NO_THREAT) || HasAttribute(SPELL_ATTR3_NO_INITIAL_AGGRO));
+    return !(HasAttribute(SPELL_ATTR1_NO_THREAT) || HasAttribute(SPELL_ATTR2_NO_INITIAL_THREAT) || HasAttribute(SPELL_ATTR4_NO_HARMFUL_THREAT));
 }
 
 bool SpellInfo::HasHitDelay() const
@@ -1694,7 +1689,7 @@ WeaponAttackType SpellInfo::GetAttackType() const
     switch (DmgClass)
     {
         case SPELL_DAMAGE_CLASS_MELEE:
-            if (HasAttribute(SPELL_ATTR3_REQ_OFFHAND))
+            if (HasAttribute(SPELL_ATTR3_REQUIRES_OFF_HAND_WEAPON))
                 result = OFF_ATTACK;
             else
                 result = BASE_ATTACK;
@@ -1743,7 +1738,7 @@ bool SpellInfo::IsAffected(uint32 familyName, flag128 const& familyFlags) const
 
 bool SpellInfo::IsAffectedBySpellMods() const
 {
-    return !HasAttribute(SPELL_ATTR3_NO_DONE_BONUS);
+    return !HasAttribute(SPELL_ATTR3_IGNORE_CASTER_MODIFIERS);
 }
 
 bool SpellInfo::IsAffectedBySpellMod(SpellModifier const* mod) const
@@ -1784,7 +1779,7 @@ bool SpellInfo::CanPierceImmuneAura(SpellInfo const* auraSpellInfo) const
         return true;
 
     // these spells (Cyclone for example) can pierce all...
-    if (HasAttribute(SPELL_ATTR1_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS) || HasAttribute(SPELL_ATTR2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE))
+    if (HasAttribute(SPELL_ATTR1_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS) || HasAttribute(SPELL_ATTR2_NO_SCHOOL_IMMUNITIES))
     {
         // ...but not these (Divine shield, Ice block, Cyclone and Banish for example)
         if (auraSpellInfo->Mechanic != MECHANIC_IMMUNE_SHIELD &&
@@ -1812,7 +1807,7 @@ bool SpellInfo::CanDispelAura(SpellInfo const* auraSpellInfo) const
 
     // These auras (Cyclone for example) are not dispelable
     if ((auraSpellInfo->HasAttribute(SPELL_ATTR1_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS) && auraSpellInfo->Mechanic != MECHANIC_NONE)
-        || auraSpellInfo->HasAttribute(SPELL_ATTR2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE))
+        || auraSpellInfo->HasAttribute(SPELL_ATTR2_NO_SCHOOL_IMMUNITIES))
         return false;
 
     return true;
@@ -1821,16 +1816,8 @@ bool SpellInfo::CanDispelAura(SpellInfo const* auraSpellInfo) const
 bool SpellInfo::IsSingleTarget() const
 {
     // all other single target spells have if it has AttributesEx5
-    if (HasAttribute(SPELL_ATTR5_SINGLE_TARGET_SPELL))
+    if (HasAttribute(SPELL_ATTR5_LIMIT_N))
         return true;
-
-    switch (GetSpellSpecific())
-    {
-        case SPELL_SPECIFIC_JUDGEMENT:
-            return true;
-        default:
-            break;
-    }
 
     return false;
 }
@@ -1879,7 +1866,6 @@ bool SpellInfo::IsAuraExclusiveBySpecificPerCasterWith(SpellInfo const* spellInf
         case SPELL_SPECIFIC_CURSE:
         case SPELL_SPECIFIC_BANE:
         case SPELL_SPECIFIC_ASPECT:
-        case SPELL_SPECIFIC_JUDGEMENT:
         case SPELL_SPECIFIC_WARLOCK_CORRUPTION:
             return spellSpec == spellInfo->GetSpellSpecific();
         default:
@@ -1929,7 +1915,7 @@ SpellCastResult SpellInfo::CheckShapeshift(uint32 form) const
     else
     {
         // needs shapeshift
-        if (!HasAttribute(SPELL_ATTR2_NOT_NEED_SHAPESHIFT) && Stances != 0)
+        if (!HasAttribute(SPELL_ATTR2_ALLOW_WHILE_NOT_SHAPESHIFTED_CASTER_FORM) && Stances != 0)
             return SPELL_FAILED_ONLY_SHAPESHIFT;
     }
 
@@ -1957,7 +1943,7 @@ SpellCastResult SpellInfo::CheckLocation(uint32 map_id, uint32 zone_id, uint32 a
     }
 
     // continent limitation (virtual continent)
-    if (HasAttribute(SPELL_ATTR4_CAST_ONLY_IN_OUTLAND))
+    if (HasAttribute(SPELL_ATTR4_ONLY_FLYING_AREAS))
     {
         uint32 mountFlags = 0;
         if (player && player->HasAuraType(SPELL_AURA_MOUNT_RESTRICTIONS))
@@ -2125,9 +2111,9 @@ SpellCastResult SpellInfo::CheckTarget(WorldObject const* caster, WorldObject co
             return SPELL_FAILED_TARGET_AFFECTING_COMBAT;
 
         // only spells with SPELL_ATTR3_ONLY_TARGET_GHOSTS can target ghosts
-        if (HasAttribute(SPELL_ATTR3_ONLY_TARGET_GHOSTS) != unitTarget->HasAuraType(SPELL_AURA_GHOST))
+        if (HasAttribute(SPELL_ATTR3_ONLY_ON_GHOSTS) != unitTarget->HasAuraType(SPELL_AURA_GHOST))
         {
-            if (HasAttribute(SPELL_ATTR3_ONLY_TARGET_GHOSTS))
+            if (HasAttribute(SPELL_ATTR3_ONLY_ON_GHOSTS))
                 return SPELL_FAILED_TARGET_NOT_GHOST;
             else
                 return SPELL_FAILED_BAD_TARGETS;
@@ -2138,7 +2124,7 @@ SpellCastResult SpellInfo::CheckTarget(WorldObject const* caster, WorldObject co
             if (caster->GetTypeId() == TYPEID_PLAYER)
             {
                 // Do not allow these spells to target creatures not tapped by us (Banish, Polymorph, many quest spells)
-                if (HasAttribute(SPELL_ATTR2_CANT_TARGET_TAPPED))
+                if (HasAttribute(SPELL_ATTR2_CANNOT_CAST_ON_TAPPED))
                     if (Creature const* targetCreature = unitTarget->ToCreature())
                         if (targetCreature->hasLootRecipient() && !targetCreature->isTappedBy(caster->ToPlayer()))
                             return SPELL_FAILED_CANT_CAST_ON_TAPPED;
@@ -2183,8 +2169,16 @@ SpellCastResult SpellInfo::CheckTarget(WorldObject const* caster, WorldObject co
     else return SPELL_CAST_OK;
 
     // corpseOwner and unit specific target checks
-    if (HasAttribute(SPELL_ATTR3_ONLY_TARGET_PLAYERS) && unitTarget->GetTypeId() != TYPEID_PLAYER)
-       return SPELL_FAILED_TARGET_NOT_PLAYER;
+    if (!unitTarget->IsPlayer())
+    {
+        if (HasAttribute(SPELL_ATTR3_ONLY_ON_PLAYER))
+            return SPELL_FAILED_TARGET_NOT_PLAYER;
+
+        if (HasAttribute(SPELL_ATTR5_NOT_ON_PLAYER_CONTROLLED_NPC) && unitTarget->IsControlledByPlayer())
+            return SPELL_FAILED_TARGET_IS_PLAYER_CONTROLLED;
+    }
+    else if (HasAttribute(SPELL_ATTR5_NOT_ON_PLAYER))
+        return SPELL_FAILED_TARGET_IS_PLAYER;
 
     if (!IsAllowingDeadTarget() && !unitTarget->IsAlive())
        return SPELL_FAILED_TARGETS_DEAD;
@@ -2658,10 +2652,6 @@ void SpellInfo::_LoadSpellSpecific()
 
                 if (SpellFamilyFlags[0] & 0x00002190)
                     return SPELL_SPECIFIC_HAND;
-
-                // Judgement
-                if (Id == 20271)
-                    return SPELL_SPECIFIC_JUDGEMENT;
 
                 // only paladin auras have this (for palaldin class family)
                 switch (Id)
@@ -3473,7 +3463,7 @@ void SpellInfo::_LoadImmunityInfo()
         _allowedMechanicMask |= immuneInfo.MechanicImmuneMask;
     }
 
-    if (HasAttribute(SPELL_ATTR5_USABLE_WHILE_STUNNED))
+    if (HasAttribute(SPELL_ATTR5_ALLOW_WHILE_STUNNED))
     {
         switch (Id)
         {
@@ -3493,10 +3483,10 @@ void SpellInfo::_LoadImmunityInfo()
         }
     }
 
-    if (HasAttribute(SPELL_ATTR5_USABLE_WHILE_CONFUSED))
+    if (HasAttribute(SPELL_ATTR5_ALLOW_WHILE_CONFUSED))
         _allowedMechanicMask |= (1 << MECHANIC_DISORIENTED);
 
-    if (HasAttribute(SPELL_ATTR5_USABLE_WHILE_FEARED))
+    if (HasAttribute(SPELL_ATTR5_ALLOW_WHILE_FLEEING))
     {
         switch (Id)
         {
@@ -3600,7 +3590,7 @@ bool SpellInfo::CanSpellProvideImmunityAgainstAura(SpellInfo const* auraSpellInf
 
         ImmunityInfo const& immuneInfo = effectInfo.GetImmunityInfo();
 
-        if (!auraSpellInfo->HasAttribute(SPELL_ATTR1_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS) && !auraSpellInfo->HasAttribute(SPELL_ATTR2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE))
+        if (!auraSpellInfo->HasAttribute(SPELL_ATTR1_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS) && !auraSpellInfo->HasAttribute(SPELL_ATTR2_NO_SCHOOL_IMMUNITIES))
         {
             if (uint32 schoolImmunity = immuneInfo.SchoolImmuneMask)
                 if ((auraSpellInfo->SchoolMask & schoolImmunity) != 0)
@@ -3637,7 +3627,7 @@ bool SpellInfo::CanSpellProvideImmunityAgainstAura(SpellInfo const* auraSpellInf
                 }
             }
 
-            if (!auraSpellInfo->HasAttribute(SPELL_ATTR3_IGNORE_HIT_RESULT))
+            if (!auraSpellInfo->HasAttribute(SPELL_ATTR3_ALWAYS_HIT))
             {
                 if (AuraType auraName = auraSpellEffectInfo.ApplyAuraName)
                 {
@@ -3646,7 +3636,7 @@ bool SpellInfo::CanSpellProvideImmunityAgainstAura(SpellInfo const* auraSpellInf
                     if (auraImmuneItr != immuneInfo.AuraTypeImmune.cend())
                         isImmuneToAuraEffectApply = true;
 
-                    if (!isImmuneToAuraEffectApply && !auraSpellInfo->IsPositiveEffect(auraSpellEffectInfo.EffectIndex) && !auraSpellInfo->HasAttribute(SPELL_ATTR2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE))
+                    if (!isImmuneToAuraEffectApply && !auraSpellInfo->IsPositiveEffect(auraSpellEffectInfo.EffectIndex) && !auraSpellInfo->HasAttribute(SPELL_ATTR2_NO_SCHOOL_IMMUNITIES))
                     {
                         if (uint32 applyHarmfulAuraImmunityMask = immuneInfo.ApplyHarmfulAuraImmuneMask)
                             if ((auraSpellInfo->GetSchoolMask() & applyHarmfulAuraImmunityMask) != 0)
@@ -3692,7 +3682,7 @@ bool SpellInfo::SpellCancelsAuraEffect(AuraEffect const* aurEff) const
                 break;
             case SPELL_AURA_SCHOOL_IMMUNITY:
             case SPELL_AURA_MOD_IMMUNE_AURA_APPLY_SCHOOL:
-                if (aurEff->GetSpellInfo()->HasAttribute(SPELL_ATTR2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE) || !(aurEff->GetSpellInfo()->SchoolMask & miscValue))
+                if (aurEff->GetSpellInfo()->HasAttribute(SPELL_ATTR2_NO_SCHOOL_IMMUNITIES) || !(aurEff->GetSpellInfo()->SchoolMask & miscValue))
                     continue;
                 break;
             case SPELL_AURA_DISPEL_IMMUNITY:
@@ -3829,7 +3819,7 @@ uint32 SpellInfo::GetMaxTicks() const
                     if (effect.ApplyAuraPeriod > 0 && DotDuration > 0)
                     {
                         totalTicks = static_cast<uint32>(DotDuration) / effect.ApplyAuraPeriod;
-                        if (HasAttribute(SPELL_ATTR5_START_PERIODIC_AT_APPLY))
+                        if (HasAttribute(SPELL_ATTR5_EXTRA_INITIAL_PERIOD))
                             ++totalTicks;
                     }
                     break;
@@ -3948,7 +3938,7 @@ Optional<SpellPowerCost> SpellInfo::CalcPowerCost(SpellPowerEntry const* power, 
     bool initiallyNegative = powerCost < 0;
 
     // Shiv - costs 20 + weaponSpeed*10 energy (apply only to non-triggered spell with energy cost)
-    if (HasAttribute(SPELL_ATTR4_SPELL_VS_EXTEND_COST))
+    if (HasAttribute(SPELL_ATTR4_WEAPON_SPEED_COST_SCALING))
     {
         uint32 speed = 0;
         if (SpellShapeshiftFormEntry const* ss = sSpellShapeshiftFormStore.LookupEntry(unitCaster->GetShapeshiftForm()))
@@ -3956,7 +3946,7 @@ Optional<SpellPowerCost> SpellInfo::CalcPowerCost(SpellPowerEntry const* power, 
         else
         {
             WeaponAttackType slot = BASE_ATTACK;
-            if (!HasAttribute(SPELL_ATTR3_MAIN_HAND) && HasAttribute(SPELL_ATTR3_REQ_OFFHAND))
+            if (!HasAttribute(SPELL_ATTR3_REQUIRES_MAIN_HAND_WEAPON) && HasAttribute(SPELL_ATTR3_REQUIRES_OFF_HAND_WEAPON))
                 slot = OFF_ATTACK;
 
             speed = unitCaster->GetBaseAttackTime(slot);
@@ -4268,7 +4258,7 @@ SpellInfo const* SpellInfo::GetAuraRankForLevel(uint8 level) const
         return this;
 
     // Client ignores spell with these attributes (sub_53D9D0)
-    if (HasAttribute(SPELL_ATTR0_AURA_IS_DEBUFF) || HasAttribute(SPELL_ATTR2_UNK3) || HasAttribute(SPELL_ATTR3_DRAIN_SOUL))
+    if (HasAttribute(SPELL_ATTR0_AURA_IS_DEBUFF) || HasAttribute(SPELL_ATTR2_ALLOW_LOW_LEVEL_BUFF) || HasAttribute(SPELL_ATTR3_ONLY_PROC_ON_CASTER))
         return this;
 
     bool needRankSelection = false;
@@ -4411,6 +4401,9 @@ bool _isPositiveEffectImpl(SpellInfo const* spellInfo, SpellEffectInfo const& ef
     // not found a single positive spell with this attribute
     if (spellInfo->HasAttribute(SPELL_ATTR0_AURA_IS_DEBUFF))
         return false;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR4_AURA_IS_BUFF))
+        return true;
 
     visited.insert({ spellInfo, effect.EffectIndex });
 

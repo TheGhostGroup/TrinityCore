@@ -234,7 +234,7 @@ void AuraApplication::BuildUpdatePacket(WorldPackets::Spells::AuraInfo& auraInfo
     auraData.SpellID = aura->GetId();
     auraData.Visual = aura->GetSpellVisual();
     auraData.Flags = GetFlags();
-    if (aura->GetType() != DYNOBJ_AURA_TYPE && aura->GetMaxDuration() > 0 && !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR5_HIDE_DURATION))
+    if (aura->GetType() != DYNOBJ_AURA_TYPE && aura->GetMaxDuration() > 0 && !aura->GetSpellInfo()->HasAttribute(SPELL_ATTR5_DO_NOT_DISPLAY_DURATION))
         auraData.Flags |= AFLAG_DURATION;
 
     auraData.ActiveFlags = GetEffectMask();
@@ -809,7 +809,7 @@ void Aura::Update(uint32 diff, Unit* caster)
         {
             if (m_timeCla > int32(diff))
                 m_timeCla -= diff;
-            else if (caster)
+            else if (caster && (caster == GetOwner() || !GetSpellInfo()->HasAttribute(SPELL_ATTR2_NO_TARGET_PER_SECOND_COSTS)))
             {
                 if (!m_periodicCosts.empty())
                 {
@@ -894,7 +894,7 @@ void Aura::RefreshDuration(bool withMods)
     {
         int32 duration = m_spellInfo->GetMaxDuration();
         // Calculate duration of periodics affected by haste.
-        if (m_spellInfo->HasAttribute(SPELL_ATTR5_HASTE_AFFECT_DURATION))
+        if (m_spellInfo->HasAttribute(SPELL_ATTR8_HASTE_AFFECTS_DURATION))
             duration = int32(duration * caster->m_unitData->ModCastingSpeed);
 
         SetMaxDuration(duration);
@@ -1064,7 +1064,7 @@ bool Aura::ModStackAmount(int32 num, AuraRemoveMode removeMode /*= AURA_REMOVE_B
         return true;
     }
 
-    bool refresh = stackAmount >= GetStackAmount() && (m_spellInfo->StackAmount || !m_spellInfo->HasAttribute(SPELL_ATTR1_AURA_UNIQUE));
+    bool refresh = stackAmount >= GetStackAmount() && (m_spellInfo->StackAmount || (!m_spellInfo->HasAttribute(SPELL_ATTR1_AURA_UNIQUE) && !m_spellInfo->HasAttribute(SPELL_ATTR5_AURA_UNIQUE_PER_CASTER)));
 
     // Update stack amount
     SetStackAmount(stackAmount);
@@ -1114,7 +1114,7 @@ bool Aura::IsRemovedOnShapeLost(Unit* target) const
 {
     return GetCasterGUID() == target->GetGUID()
         && m_spellInfo->Stances
-        && !m_spellInfo->HasAttribute(SPELL_ATTR2_NOT_NEED_SHAPESHIFT)
+        && !m_spellInfo->HasAttribute(SPELL_ATTR2_ALLOW_WHILE_NOT_SHAPESHIFTED_CASTER_FORM)
         && !m_spellInfo->HasAttribute(SPELL_ATTR0_NOT_SHAPESHIFTED);
 }
 
@@ -1167,7 +1167,6 @@ bool Aura::IsSingleTargetWith(Aura const* aura) const
     // spell with single target specific types
     switch (spec)
     {
-        case SPELL_SPECIFIC_JUDGEMENT:
         case SPELL_SPECIFIC_MAGE_POLYMORPH:
             if (aura->GetSpellInfo()->GetSpellSpecific() == spec)
                 return true;
@@ -1632,7 +1631,7 @@ bool Aura::CanStackWith(Aura const* existingAura) const
         if (existingAura->GetSpellInfo()->IsChanneled())
             return true;
 
-        if (m_spellInfo->HasAttribute(SPELL_ATTR3_STACK_FOR_DIFF_CASTERS))
+        if (m_spellInfo->HasAttribute(SPELL_ATTR3_DOT_STACKING_RULE))
             return true;
 
         // check same periodic auras
@@ -1711,9 +1710,15 @@ bool Aura::IsProcOnCooldown(TimePoint now) const
     return m_procCooldown > now;
 }
 
-void Aura::AddProcCooldown(TimePoint cooldownEnd)
+void Aura::AddProcCooldown(SpellProcEntry const* procEntry, TimePoint now)
 {
-    m_procCooldown = cooldownEnd;
+    // cooldowns should be added to the whole aura (see 51698 area aura)
+    int32 procCooldown = procEntry->Cooldown.count();
+    if (Unit* caster = GetCaster())
+        if (Player* modOwner = caster->GetSpellModOwner())
+            modOwner->ApplySpellMod(GetSpellInfo(), SpellModOp::ProcCooldown, procCooldown);
+
+    m_procCooldown = now + Milliseconds(procCooldown);
 }
 
 void Aura::ResetProcCooldown()
@@ -1730,22 +1735,36 @@ void Aura::PrepareProcToTrigger(AuraApplication* aurApp, ProcEventInfo& eventInf
     SpellProcEntry const* procEntry = sSpellMgr->GetSpellProcEntry(GetSpellInfo());
     ASSERT(procEntry);
 
+    PrepareProcChargeDrop(procEntry, eventInfo);
+
+    // cooldowns should be added to the whole aura (see 51698 area aura)
+    AddProcCooldown(procEntry, now);
+
+    SetLastProcSuccessTime(now);
+}
+
+void Aura::PrepareProcChargeDrop(SpellProcEntry const* procEntry, ProcEventInfo const& eventInfo)
+{
     // take one charge, aura expiration will be handled in Aura::TriggerProcOnEvent (if needed)
     if (!(procEntry->AttributesMask & PROC_ATTR_USE_STACKS_FOR_CHARGES) && IsUsingCharges() && (!eventInfo.GetSpellInfo() || !eventInfo.GetSpellInfo()->HasAttribute(SPELL_ATTR6_DO_NOT_CONSUME_RESOURCES)))
     {
         --m_procCharges;
         SetNeedClientUpdateForTargets();
     }
+}
 
-    // cooldowns should be added to the whole aura (see 51698 area aura)
-    int32 procCooldown = procEntry->Cooldown.count();
-    if (Unit* caster = GetCaster())
-        if (Player* modOwner = caster->GetSpellModOwner())
-            modOwner->ApplySpellMod(GetSpellInfo(), SpellModOp::ProcCooldown, procCooldown);
-
-    AddProcCooldown(now + Milliseconds(procCooldown));
-
-    SetLastProcSuccessTime(now);
+void Aura::ConsumeProcCharges(SpellProcEntry const* procEntry)
+{
+    // Remove aura if we've used last charge to proc
+    if (procEntry->AttributesMask & PROC_ATTR_USE_STACKS_FOR_CHARGES)
+    {
+        ModStackAmount(-1);
+    }
+    else if (IsUsingCharges())
+    {
+        if (!GetCharges())
+            Remove();
+    }
 }
 
 uint32 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo, TimePoint now) const
@@ -1856,6 +1875,18 @@ uint32 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo
         }
     }
 
+    if (m_spellInfo->HasAttribute(SPELL_ATTR3_ONLY_PROC_OUTDOORS))
+        if (!target->IsOutdoors())
+            return 0;
+
+    if (m_spellInfo->HasAttribute(SPELL_ATTR3_ONLY_PROC_ON_CASTER))
+        if (target->GetGUID() != GetCasterGUID())
+            return 0;
+
+    if (!m_spellInfo->HasAttribute(SPELL_ATTR4_ALLOW_PROC_WHILE_SITTING))
+        if (!target->IsStandState())
+            return 0;
+
     bool success = roll_chance_f(CalcProcChance(*procEntry, eventInfo));
 
     const_cast<Aura*>(this)->SetLastProcAttemptTime(now);
@@ -1913,16 +1944,7 @@ void Aura::TriggerProcOnEvent(uint32 procEffectMask, AuraApplication* aurApp, Pr
         CallScriptAfterProcHandlers(aurApp, eventInfo);
     }
 
-    // Remove aura if we've used last charge to proc
-    if (ASSERT_NOTNULL(sSpellMgr->GetSpellProcEntry(m_spellInfo))->AttributesMask & PROC_ATTR_USE_STACKS_FOR_CHARGES)
-    {
-        ModStackAmount(-1);
-    }
-    else if (IsUsingCharges())
-    {
-        if (!GetCharges())
-            Remove();
-    }
+    ConsumeProcCharges(ASSERT_NOTNULL(sSpellMgr->GetSpellProcEntry(GetSpellInfo())));
 }
 
 float Aura::CalcPPMProcChance(Unit* actor) const

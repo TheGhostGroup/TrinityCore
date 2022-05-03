@@ -2357,27 +2357,6 @@ void Creature::LoadTemplateImmunities()
     }
 }
 
-bool Creature::IsImmunedToSpell(SpellInfo const* spellInfo, WorldObject const* caster) const
-{
-    if (!spellInfo)
-        return false;
-
-    bool immunedToAllEffects = true;
-    for (SpellEffectInfo const& spellEffectInfo : spellInfo->GetEffects())
-    {
-        if (spellEffectInfo.IsEffect() && !IsImmunedToSpellEffect(spellInfo, spellEffectInfo, caster))
-        {
-            immunedToAllEffects = false;
-            break;
-        }
-    }
-
-    if (immunedToAllEffects)
-        return true;
-
-    return Unit::IsImmunedToSpell(spellInfo, caster);
-}
-
 bool Creature::IsImmunedToSpellEffect(SpellInfo const* spellInfo, SpellEffectInfo const& spellEffectInfo, WorldObject const* caster) const
 {
     if (GetCreatureTemplate()->type == CREATURE_TYPE_MECHANICAL && spellEffectInfo.IsEffect(SPELL_EFFECT_HEAL))
@@ -3293,7 +3272,7 @@ void Creature::SetSpellFocus(Spell const* focusSpell, WorldObject const* target)
 
     _spellFocusInfo.Spell = focusSpell;
 
-    bool const noTurnDuringCast = spellInfo->HasAttribute(SPELL_ATTR5_DONT_TURN_DURING_CAST);
+    bool const noTurnDuringCast = spellInfo->HasAttribute(SPELL_ATTR5_AI_DOESNT_FACE_TARGET);
     bool const turnDisabled = HasUnitFlag2(UNIT_FLAG2_CANNOT_TURN);
     // set target, then force send update packet to players if it changed to provide appropriate facing
     ObjectGuid newTarget = (target && !noTurnDuringCast && !turnDisabled) ? target->GetGUID() : ObjectGuid::Empty;
@@ -3335,7 +3314,7 @@ void Creature::ReleaseSpellFocus(Spell const* focusSpell, bool withDelay)
     if (focusSpell && focusSpell != _spellFocusInfo.Spell)
         return;
 
-    if (_spellFocusInfo.Spell->GetSpellInfo()->HasAttribute(SPELL_ATTR5_DONT_TURN_DURING_CAST))
+    if (_spellFocusInfo.Spell->GetSpellInfo()->HasAttribute(SPELL_ATTR5_AI_DOESNT_FACE_TARGET))
         ClearUnitState(UNIT_STATE_FOCUSING);
 
     if (IsPet()) // player pets do not use delay system
