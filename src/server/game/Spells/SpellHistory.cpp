@@ -430,11 +430,6 @@ void SpellHistory::StartCooldown(SpellInfo const* spellInfo, uint32 itemId, Spel
     {
         if (!forcedCooldown)
         {
-            // shoot spells used equipped item cooldown values already assigned in SetBaseAttackTime(RANGED_ATTACK)
-            // prevent 0 cooldowns set by another way
-            if (cooldown <= Duration::zero() && categoryCooldown <= Duration::zero() && (categoryId == 76 || (spellInfo->IsAutoRepeatRangedSpell() && spellInfo->Id != 75)))
-                cooldown = Milliseconds(*_owner->m_unitData->RangedAttackRoundBaseTime);
-
             // Now we have cooldown data (if found any), time to apply mods
             if (Player* modOwner = _owner->GetSpellModOwner())
             {
@@ -448,7 +443,7 @@ void SpellHistory::StartCooldown(SpellInfo const* spellInfo, uint32 itemId, Spel
                 if (cooldown >= Duration::zero())
                     applySpellMod(cooldown);
 
-                if (categoryCooldown >= Clock::duration::zero() && !spellInfo->HasAttribute(SPELL_ATTR6_IGNORE_CATEGORY_COOLDOWN_MODS))
+                if (categoryCooldown >= Clock::duration::zero() && !spellInfo->HasAttribute(SPELL_ATTR6_NO_CATEGORY_COOLDOWN_MODS))
                     applySpellMod(categoryCooldown);
             }
 

@@ -3369,7 +3369,9 @@ void Player::RemoveArenaSpellCooldowns(bool removeActivePetCooldowns)
     GetSpellHistory()->ResetCooldowns([](SpellHistory::CooldownStorageType::iterator itr)
     {
         SpellInfo const* spellInfo = sSpellMgr->AssertSpellInfo(itr->first, DIFFICULTY_NONE);
-        return spellInfo->RecoveryTime < 10 * MINUTE * IN_MILLISECONDS && spellInfo->CategoryRecoveryTime < 10 * MINUTE * IN_MILLISECONDS;
+        return spellInfo->RecoveryTime < 10 * MINUTE * IN_MILLISECONDS
+            && spellInfo->CategoryRecoveryTime < 10 * MINUTE * IN_MILLISECONDS
+            && !spellInfo->HasAttribute(SPELL_ATTR6_DO_NOT_RESET_COOLDOWN_IN_ARENA);
     }, true);
 
     // pet cooldowns
@@ -11488,10 +11490,15 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16 &dest, Item* pItem, bool
                 }
 
                 if (IsInCombat() && (pProto->GetClass() == ITEM_CLASS_WEAPON || pProto->GetInventoryType() == INVTYPE_RELIC) && m_weaponChangeTimer != 0)
-                    return EQUIP_ERR_CLIENT_LOCKED_OUT;         // maybe exist better err
+                    return EQUIP_ERR_ITEM_COOLDOWN;
 
-                if (IsNonMeleeSpellCast(false))
-                    return EQUIP_ERR_CLIENT_LOCKED_OUT;
+                if (Spell* currentGenericSpell = GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                    if (!currentGenericSpell->GetSpellInfo()->HasAttribute(SPELL_ATTR6_ALLOW_EQUIP_WHILE_CASTING))
+                        return EQUIP_ERR_CLIENT_LOCKED_OUT;
+
+                if (Spell* currentChanneledSpell = GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+                    if (!currentChanneledSpell->GetSpellInfo()->HasAttribute(SPELL_ATTR6_ALLOW_EQUIP_WHILE_CASTING))
+                        return EQUIP_ERR_CLIENT_LOCKED_OUT;
             }
 
             Optional<ContentTuningLevels> requiredLevels;
@@ -25018,7 +25025,7 @@ void Player::LearnSkillRewardedSpells(uint32 skillId, uint32 skillValue, Races r
             continue;
 
         // Check race if set
-        if (ability->RaceMask && !ability->RaceMask.HasRace(race))
+        if (!ability->RaceMask.IsEmpty() && !ability->RaceMask.HasRace(race))
             continue;
 
         // Check class if set
@@ -25380,7 +25387,7 @@ bool Player::IsSpellFitByClassAndRace(uint32 spell_id) const
     for (SkillLineAbilityMap::const_iterator _spell_idx = bounds.first; _spell_idx != bounds.second; ++_spell_idx)
     {
         // skip wrong race skills
-        if (_spell_idx->second->RaceMask && !_spell_idx->second->RaceMask.HasRace(race))
+        if (!_spell_idx->second->RaceMask.IsEmpty() && !_spell_idx->second->RaceMask.HasRace(race))
             continue;
 
         // skip wrong class skills

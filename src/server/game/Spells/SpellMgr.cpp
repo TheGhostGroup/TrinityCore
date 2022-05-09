@@ -715,7 +715,7 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
         if (!player || gender != player->GetNativeGender())
             return false;
 
-    if (raceMask)                                // is not expected race
+    if (!raceMask.IsEmpty())                     // is not expected race
         if (!player || !raceMask.HasRace(player->GetRace()))
             return false;
 
@@ -2291,7 +2291,7 @@ void SpellMgr::LoadSpellAreas()
                     continue;
                 if (spellArea.auraSpell != itr->second.auraSpell)
                     continue;
-                if ((spellArea.raceMask & itr->second.raceMask) == 0)
+                if ((spellArea.raceMask & itr->second.raceMask).IsEmpty())
                     continue;
                 if (spellArea.gender != itr->second.gender)
                     continue;
@@ -2382,7 +2382,7 @@ void SpellMgr::LoadSpellAreas()
             }
         }
 
-        if (spellArea.raceMask && (spellArea.raceMask.RawValue & RACEMASK_ALL_PLAYABLE) == 0)
+        if (!spellArea.raceMask.IsEmpty() && (spellArea.raceMask & RACEMASK_ALL_PLAYABLE).IsEmpty())
         {
             TC_LOG_ERROR("sql.sql", "The spell %u listed in `spell_area` has wrong race mask (" UI64FMTD ") requirement.", spell, spellArea.raceMask.RawValue);
             continue;
@@ -3650,7 +3650,7 @@ void SpellMgr::LoadSpellInfoCorrections()
         41487  // Envenom - Black Temple
     }, [](SpellInfo* spellInfo)
     {
-        spellInfo->AttributesEx6 |= SPELL_ATTR6_CAN_TARGET_INVISIBLE;
+        spellInfo->AttributesEx6 |= SPELL_ATTR6_IGNORE_PHASE_SHIFT;
     });
 
     // Oscillation Field
@@ -4393,7 +4393,7 @@ void SpellMgr::LoadSpellInfoCorrections()
     // Twilight Mending
     ApplySpellFix({ 75509 }, [](SpellInfo* spellInfo)
     {
-        spellInfo->AttributesEx6 |= SPELL_ATTR6_CAN_TARGET_INVISIBLE;
+        spellInfo->AttributesEx6 |= SPELL_ATTR6_IGNORE_PHASE_SHIFT;
         spellInfo->AttributesEx2 |= SPELL_ATTR2_IGNORE_LINE_OF_SIGHT;
     });
 

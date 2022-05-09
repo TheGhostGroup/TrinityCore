@@ -491,7 +491,7 @@ protected:
 
 Spell::Spell(WorldObject* caster, SpellInfo const* info, TriggerCastFlags triggerFlags, ObjectGuid originalCasterGUID /*= ObjectGuid::Empty*/,
     ObjectGuid originalCastId /*= ObjectGuid::Empty*/) :
-m_spellInfo(info), m_caster((info->HasAttribute(SPELL_ATTR6_CAST_BY_CHARMER) && caster->GetCharmerOrOwner()) ? caster->GetCharmerOrOwner() : caster),
+m_spellInfo(info), m_caster((info->HasAttribute(SPELL_ATTR6_ORIGINATE_FROM_CONTROLLER) && caster->GetCharmerOrOwner()) ? caster->GetCharmerOrOwner() : caster),
 m_spellValue(new SpellValue(m_spellInfo, caster)), _spellEvent(nullptr)
 {
     m_customError = SPELL_CUSTOM_ERROR_NONE;
@@ -2847,7 +2847,14 @@ void Spell::TargetInfo::DoDamageAndTriggers(Spell* spell)
         if (MissCondition != SPELL_MISS_EVADE && _spellHitTarget && !spell->m_caster->IsFriendlyTo(unit) && (!spell->IsPositive() || spell->m_spellInfo->HasEffect(SPELL_EFFECT_DISPEL)))
         {
             if (Unit* unitCaster = spell->m_caster->ToUnit())
+            {
                 unitCaster->AtTargetAttacked(unit, spell->m_spellInfo->HasInitialAggro());
+
+                if (spell->m_spellInfo->HasAttribute(SPELL_ATTR6_TAPS_IMMEDIATELY))
+                    if (Creature* targetCreature = unit->ToCreature())
+                        if (!targetCreature->hasLootRecipient() && unitCaster->IsPlayer())
+                            targetCreature->SetLootRecipient(unitCaster);
+            }
 
             if (!spell->m_spellInfo->HasAttribute(SPELL_ATTR3_DO_NOT_TRIGGER_TARGET_STAND) && !unit->IsStandState())
                 unit->SetStandState(UNIT_STAND_STATE_STAND);
@@ -3338,7 +3345,7 @@ SpellCastResult Spell::prepare(SpellCastTargets const& targets, AuraEffect const
     // handle just the general SPELL_FAILED_BAD_TARGETS result which is the default result for most DBC target checks
     if (_triggeredCastFlags & TRIGGERED_IGNORE_TARGET_CHECK && result == SPELL_FAILED_BAD_TARGETS)
         result = SPELL_CAST_OK;
-    if (result != SPELL_CAST_OK && !IsAutoRepeat())          //always cast autorepeat dummy for triggering
+    if (result != SPELL_CAST_OK)
     {
         // Periodic auras should be interrupted when aura triggers a spell which can't be cast
         // for example bladestorm aura should be removed on disarm as of patch 3.3.5
@@ -3354,6 +3361,10 @@ SpellCastResult Spell::prepare(SpellCastTargets const& targets, AuraEffect const
             SendCastResult(result, &param1, &param2);
         else
             SendCastResult(result);
+
+        // queue autorepeat spells for future repeating
+        if (GetCurrentContainer() == CURRENT_AUTOREPEAT_SPELL && m_caster->IsUnit())
+            m_caster->ToUnit()->SetCurrentCastSpell(this);
 
         finish(false);
         return result;
@@ -3375,19 +3386,14 @@ SpellCastResult Spell::prepare(SpellCastTargets const& targets, AuraEffect const
     else
         m_casttime = m_spellInfo->CalcCastTime(this);
 
-    // don't allow channeled spells / spells with cast time to be cast while moving
-    // exception are only channeled spells that have no casttime and dont have movement interrupt flag
-    // (even if they are interrupted on moving, spells with almost immediate effect get to have their effect processed before movement interrupter kicks in)
-    // don't cancel spells which are affected by a SPELL_AURA_CAST_WHILE_WALKING effect
-    if (((m_spellInfo->IsChanneled() || m_casttime) && m_caster->GetTypeId() == TYPEID_PLAYER && !(m_caster->ToUnit()->IsCharmed() && m_caster->ToUnit()->GetCharmerGUID().IsCreature()) && m_caster->ToUnit()->isMoving() &&
-        m_spellInfo->InterruptFlags.HasFlag(SpellInterruptFlags::Movement)) && !m_caster->ToUnit()->CanCastSpellWhileMoving(m_spellInfo))
+    if (m_caster->IsUnit() && m_caster->ToUnit()->isMoving())
     {
-        // 1. Has casttime, 2. Or doesn't have flag to allow movement during channel
-        if (m_casttime || !m_spellInfo->IsMoveAllowedChannel())
+        result = CheckMovement();
+        if (result != SPELL_CAST_OK)
         {
-            SendCastResult(SPELL_FAILED_MOVING);
+            SendCastResult(result);
             finish(false);
-            return SPELL_FAILED_MOVING;
+            return result;
         }
     }
 
@@ -4089,6 +4095,9 @@ void Spell::SendSpellCooldown()
         m_caster->ToUnit()->GetSpellHistory()->HandleCooldowns(m_spellInfo, m_CastItem, this);
     else
         m_caster->ToUnit()->GetSpellHistory()->HandleCooldowns(m_spellInfo, m_castItemEntry, this);
+
+    if (IsAutoRepeat())
+        m_caster->ToUnit()->resetAttackTimer(RANGED_ATTACK);
 }
 
 void Spell::update(uint32 difftime)
@@ -4110,20 +4119,13 @@ void Spell::update(uint32 difftime)
 
     // check if the player caster has moved before the spell finished
     // with the exception of spells affected with SPELL_AURA_CAST_WHILE_WALKING effect
-    if ((m_caster->GetTypeId() == TYPEID_PLAYER && m_timer != 0) &&
-        m_caster->ToUnit()->isMoving() && (m_spellInfo->InterruptFlags.HasFlag(SpellInterruptFlags::Movement)) &&
-        (!m_spellInfo->HasEffect(SPELL_EFFECT_STUCK) || !m_caster->ToUnit()->HasUnitMovementFlag(MOVEMENTFLAG_FALLING_FAR)) &&
-        !m_caster->ToUnit()->CanCastSpellWhileMoving(m_spellInfo))
+    if (m_timer != 0 && m_caster->IsUnit() && m_caster->ToUnit()->isMoving() && CheckMovement() != SPELL_CAST_OK)
     {
-        // don't cancel for melee, autorepeat, triggered and instant spells
-        if (!m_spellInfo->IsNextMeleeSwingSpell() && !IsAutoRepeat() && !IsTriggered() && !(IsChannelActive() && m_spellInfo->IsMoveAllowedChannel()))
-        {
-            // if charmed by creature, trust the AI not to cheat and allow the cast to proceed
-            // @todo this is a hack, "creature" movesplines don't differentiate turning/moving right now
-            // however, checking what type of movement the spline is for every single spline would be really expensive
-            if (!m_caster->ToUnit()->GetCharmerGUID().IsCreature())
-                cancel();
-        }
+        // if charmed by creature, trust the AI not to cheat and allow the cast to proceed
+        // @todo this is a hack, "creature" movesplines don't differentiate turning/moving right now
+        // however, checking what type of movement the spline is for every single spline would be really expensive
+        if (!m_caster->ToUnit()->GetCharmerGUID().IsCreature())
+            cancel();
     }
 
     switch (m_spellState)
@@ -4138,7 +4140,7 @@ void Spell::update(uint32 difftime)
                     m_timer -= difftime;
             }
 
-            if (m_timer == 0 && !m_spellInfo->IsNextMeleeSwingSpell() && !IsAutoRepeat())
+            if (m_timer == 0 && !m_spellInfo->IsNextMeleeSwingSpell())
                 // don't CheckCast for instant spells - done in spell::prepare, skip duplicate checks, needed for range checks for example
                 cast(!m_casttime);
             break;
@@ -4197,6 +4199,10 @@ void Spell::finish(bool ok)
     Unit* unitCaster = m_caster->ToUnit();
     if (!unitCaster)
         return;
+
+    // successful cast of the initial autorepeat spell is moved to idle state so that it is not deleted as long as autorepeat is active
+    if (IsAutoRepeat() && unitCaster->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL) == this)
+        m_spellState = SPELL_STATE_IDLE;
 
     if (m_spellInfo->IsChanneled())
         unitCaster->UpdateInterruptMask();
@@ -5476,12 +5482,18 @@ SpellCastResult Spell::CheckCast(bool strict, int32* param1 /*= nullptr*/, int32
                 return SPELL_FAILED_NOT_READY;
         }
 
-        if (!IsIgnoringCooldowns() && m_caster->ToUnit() && !m_caster->ToUnit()->GetSpellHistory()->IsReady(m_spellInfo, m_castItemEntry))
+        if (!IsIgnoringCooldowns() && m_caster->ToUnit())
         {
-            if (m_triggeredByAuraSpell)
+            if (!m_caster->ToUnit()->GetSpellHistory()->IsReady(m_spellInfo, m_castItemEntry))
+            {
+                if (m_triggeredByAuraSpell)
+                    return SPELL_FAILED_DONT_REPORT;
+                else
+                    return SPELL_FAILED_NOT_READY;
+            }
+
+            if ((IsAutoRepeat() || m_spellInfo->CategoryId == 76) && !m_caster->ToUnit()->isAttackReady(RANGED_ATTACK))
                 return SPELL_FAILED_DONT_REPORT;
-            else
-                return SPELL_FAILED_NOT_READY;
         }
     }
 
@@ -5577,19 +5589,6 @@ SpellCastResult Spell::CheckCast(bool strict, int32* param1 /*= nullptr*/, int32
 
             if (reqCombat && unitCaster->IsInCombat() && !m_spellInfo->CanBeUsedInCombat())
                 return SPELL_FAILED_AFFECTING_COMBAT;
-        }
-
-        // cancel autorepeat spells if cast start when moving
-        // (not wand currently autorepeat cast delayed to moving stop anyway in spell update code)
-        // Do not cancel spells which are affected by a SPELL_AURA_CAST_WHILE_WALKING effect
-        if (unitCaster->GetTypeId() == TYPEID_PLAYER && unitCaster->ToPlayer()->isMoving()
-            && (!unitCaster->IsCharmed() || !unitCaster->GetCharmerGUID().IsCreature())
-            && !unitCaster->CanCastSpellWhileMoving(m_spellInfo))
-        {
-            // skip stuck spell to allow use it in falling case and apply spell limitations at movement
-            if ((!unitCaster->HasUnitMovementFlag(MOVEMENTFLAG_FALLING_FAR) || !m_spellInfo->HasEffect(SPELL_EFFECT_STUCK)) &&
-                (IsAutoRepeat() || m_spellInfo->HasAuraInterruptFlag(SpellAuraInterruptFlags::Standing)))
-                return SPELL_FAILED_MOVING;
         }
 
         // Check vehicle flags
@@ -6640,10 +6639,6 @@ SpellCastResult Spell::CheckCasterAuras(int32* param1) const
     if (!unitCaster)
         return SPELL_CAST_OK;
 
-    // spells totally immuned to caster auras (wsg flag drop, give marks etc)
-    if (m_spellInfo->HasAttribute(SPELL_ATTR6_IGNORE_CASTER_AURAS))
-        return SPELL_CAST_OK;
-
     // these attributes only show the spell as usable on the client when it has related aura applied
     // still they need to be checked against certain mechanics
 
@@ -6861,6 +6856,32 @@ SpellCastResult Spell::CheckArenaAndRatedBattlegroundCastRules()
 
     if (isRatedBattleground && spellCooldown > 15 * MINUTE * IN_MILLISECONDS)
         return SPELL_FAILED_NOT_IN_RATED_BATTLEGROUND;
+
+    return SPELL_CAST_OK;
+}
+
+SpellCastResult Spell::CheckMovement() const
+{
+    if (IsTriggered())
+        return SPELL_CAST_OK;
+
+    if (Unit* unitCaster = m_caster->ToUnit())
+    {
+        if (!unitCaster->CanCastSpellWhileMoving(m_spellInfo))
+        {
+            if (m_casttime)
+            {
+                if (m_spellInfo->InterruptFlags.HasFlag(SpellInterruptFlags::Movement))
+                    return SPELL_FAILED_MOVING;
+            }
+            else
+            {
+                // only fail channeled casts if they are instant but cannot be channeled while moving
+                if (m_spellInfo->IsChanneled() && !m_spellInfo->IsMoveAllowedChannel())
+                    return SPELL_FAILED_MOVING;
+            }
+        }
+    }
 
     return SPELL_CAST_OK;
 }
@@ -7963,7 +7984,7 @@ bool Spell::IsAutoActionResetSpell() const
     if (IsTriggered())
         return false;
 
-    if (!m_casttime && m_spellInfo->HasAttribute(SPELL_ATTR6_NOT_RESET_SWING_IF_INSTANT))
+    if (!m_casttime && m_spellInfo->HasAttribute(SPELL_ATTR6_DOESNT_RESET_SWING_TIMER_IF_INSTANT))
         return false;
 
     return true;
