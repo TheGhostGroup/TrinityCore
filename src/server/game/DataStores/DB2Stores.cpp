@@ -778,12 +778,12 @@ DB2Manager::MountTypeXCapabilitySet const* DB2Manager::GetMountCapabilities(uint
 
 ResponseCodes DB2Manager::ValidateName(std::string const& name, LocaleConstant locale) const
 {
-    for (Trinity::wregex const& regex : _nameValidators[locale])
+    for (Trinity::regex const& regex : _nameValidators[locale])
         if (Trinity::regex_search(name, regex))
             return CHAR_NAME_PROFANE;
 
     // regexes at TOTAL_LOCALES are loaded from NamesReserved which is not locale specific
-    for (Trinity::wregex const& regex : _nameValidators[TOTAL_LOCALES])
+    for (Trinity::regex const& regex : _nameValidators[TOTAL_LOCALES])
         if (Trinity::regex_search(name, regex))
             return CHAR_NAME_RESERVED;
 
