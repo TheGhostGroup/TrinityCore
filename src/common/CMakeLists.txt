@@ -60,6 +60,8 @@ target_include_directories(common
     ${CMAKE_CURRENT_BINARY_DIR})
 
 target_link_libraries(common
+  PRIVATE
+    process
     trinity-core-interface
   PUBLIC
     boost
@@ -71,9 +73,7 @@ target_link_libraries(common
     openssl
     valgrind
     threads
-    jemalloc
-  PRIVATE
-    process)
+    jemalloc)
 
 add_dependencies(common revision_data.h)
 
