@@ -22,6 +22,8 @@
 #include "ObjectGuid.h"
 #include "Position.h"
 #include "SharedDefines.h"
+#include "ZoneScript.h"
+#include <deque>
 #include <map>
 #include <vector>
 
@@ -47,21 +49,7 @@ namespace WorldPackets
         struct BattlegroundPlayerPosition;
     }
 
-    namespace WorldState
-    {
-        class InitWorldStates;
-    }
 }
-
-enum BattlegroundCriteriaId
-{
-    BG_CRITERIA_CHECK_RESILIENT_VICTORY,
-    BG_CRITERIA_CHECK_SAVE_THE_DAY,
-    BG_CRITERIA_CHECK_EVERYTHING_COUNTS,
-    BG_CRITERIA_CHECK_AV_PERFECTION,
-    BG_CRITERIA_CHECK_DEFENSE_OF_THE_ANCIENTS,
-    BG_CRITERIA_CHECK_NOT_EVEN_A_SCRATCH,
-};
 
 enum BattlegroundBroadcastTexts
 {
@@ -143,7 +131,7 @@ enum BattlegroundTimeIntervals
     BUFF_RESPAWN_TIME               = 180,                  // secs
     BATTLEGROUND_COUNTDOWN_MAX      = 120,                  // secs
     ARENA_COUNTDOWN_MAX             = 60,                   // secs
-    PLAYER_POSITION_UPDATE_INTERVAL = 5                     // secs
+    PLAYER_POSITION_UPDATE_INTERVAL = 5000,                 // ms
 };
 
 enum BattlegroundStartTimeIntervals
@@ -264,7 +252,7 @@ This class is used to:
 3. some certain cases, same for all battlegrounds
 4. It has properties same for all battlegrounds
 */
-class TC_GAME_API Battleground
+class TC_GAME_API Battleground : public ZoneScript
 {
     public:
         Battleground(BattlegroundTemplate const* battlegroundTemplate);
@@ -282,14 +270,10 @@ class TC_GAME_API Battleground
         virtual void Reset();                               // resets all common properties for battlegrounds, must be implemented and called in BG subclass
         virtual void StartingEventCloseDoors() { }
         virtual void StartingEventOpenDoors() { }
-        virtual void ResetBGSubclass() { }                  // must be implemented in BG subclass
 
         virtual void DestroyGate(Player* /*player*/, GameObject* /*go*/) { }
 
-        /* achievement req. */
-        virtual bool IsAllNodesControlledByTeam(uint32 /*team*/) const { return false; }
-        void TriggerGameEvent(uint32 gameEventId);
-        virtual bool CheckAchievementCriteriaMeet(uint32 /*criteriaId*/, Player const* /*player*/, Unit const* /*target*/ = nullptr, uint32 /*miscvalue1*/ = 0);
+        void TriggerGameEvent(uint32 gameEventId, WorldObject* source = nullptr, WorldObject* target = nullptr) override;
 
         /* Battleground */
         // Get methods:
@@ -386,7 +370,6 @@ class TC_GAME_API Battleground
 
         // Packet Transfer
         // method that should fill worldpacket with actual world states (not yet implemented for all battlegrounds!)
-        virtual void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& /*packet*/) { }
         void SendPacketToTeam(uint32 teamId, WorldPacket const* packet, Player* except = nullptr) const;
         void SendPacketToAll(WorldPacket const* packet) const;
 
@@ -402,7 +385,7 @@ class TC_GAME_API Battleground
         void RemoveAuraOnTeam(uint32 SpellID, uint32 TeamID);
         void RewardHonorToTeam(uint32 Honor, uint32 TeamID);
         void RewardReputationToTeam(uint32 faction_id, uint32 Reputation, uint32 TeamID);
-        void UpdateWorldState(uint32 variable, uint32 value, bool hidden = false);
+        void UpdateWorldState(int32 worldStateId, int32 value, bool hidden = false);
         virtual void EndBattleground(uint32 winner);
         void BlockMovement(Player* player);
 
@@ -448,7 +431,7 @@ class TC_GAME_API Battleground
         virtual void EventPlayerClickedOnFlag(Player* /*player*/, GameObject* /*target_obj*/) { }
         void EventPlayerLoggedIn(Player* player);
         void EventPlayerLoggedOut(Player* player);
-        virtual void ProcessEvent(WorldObject* /*obj*/, uint32 /*eventId*/, WorldObject* /*invoker*/ = nullptr) { }
+        void ProcessEvent(WorldObject* /*obj*/, uint32 /*eventId*/, WorldObject* /*invoker*/) override { }
 
         // this function can be used by spell to interact with the BG map
         virtual void DoAction(uint32 /*action*/, ObjectGuid /*var*/) { }
@@ -615,7 +598,7 @@ class TC_GAME_API Battleground
 
         // Player lists
         GuidVector m_ResurrectQueue;                        // Player GUID
-        GuidDeque m_OfflineQueue;                           // Player GUID
+        std::deque<ObjectGuid> m_OfflineQueue;              // Player GUID
 
         // Invited counters are useful for player invitation to BG - do not allow, if BG is started to one faction to have 2 more players than another faction
         // Invited counters will be changed only when removing already invited player from queue, removing player from battleground and inviting player to BG

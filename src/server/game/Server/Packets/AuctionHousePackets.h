@@ -51,7 +51,7 @@ namespace WorldPackets
         struct AuctionListFilterSubClass
         {
             int32 ItemSubclass = 0;
-            uint32 InvTypeMask = 0;
+            uint64 InvTypeMask = 0;
         };
 
         struct AuctionListFilterClass
@@ -287,6 +287,7 @@ namespace WorldPackets
 
             ObjectGuid Auctioneer;
             int32 AuctionID = 0;
+            int32 ItemID = 0;
             Optional<Addon::AddOnInfo> TaintedBy;
         };
 
@@ -303,6 +304,14 @@ namespace WorldPackets
             uint32 ChangeNumberTombstone = 0;
             uint32 Count = 0;
             Optional<Addon::AddOnInfo> TaintedBy;
+        };
+
+        class AuctionRequestFavoriteList final : public ClientPacket
+        {
+        public:
+            AuctionRequestFavoriteList(WorldPacket&& packet) : ClientPacket(CMSG_AUCTION_REQUEST_FAVORITE_LIST, std::move(packet)) { }
+
+            void Read() override { }
         };
 
         class AuctionSellCommodity final : public ClientPacket
@@ -409,6 +418,7 @@ namespace WorldPackets
             WorldPacket const* Write() override;
 
             ObjectGuid Guid;
+            uint32 DeliveryDelay = 0;
             bool OpenForBusiness = true;
         };
 

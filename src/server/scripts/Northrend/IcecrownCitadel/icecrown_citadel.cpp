@@ -17,6 +17,7 @@
 
 #include "icecrown_citadel.h"
 #include "CellImpl.h"
+#include "Containers.h"
 #include "GameObjectAI.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceScript.h"
@@ -1335,9 +1336,9 @@ class spell_icc_stoneform : public AuraScript
 };
 
 // 70536, 70545, 70546, 70547 - Spirit Alarm
-class spell_icc_sprit_alarm : public SpellScript
+class spell_icc_spirit_alarm : public SpellScript
 {
-    PrepareSpellScript(spell_icc_sprit_alarm);
+    PrepareSpellScript(spell_icc_spirit_alarm);
 
     void HandleEvent(SpellEffIndex effIndex)
     {
@@ -1382,7 +1383,7 @@ class spell_icc_sprit_alarm : public SpellScript
 
     void Register() override
     {
-        OnEffectHit += SpellEffectFn(spell_icc_sprit_alarm::HandleEvent, EFFECT_2, SPELL_EFFECT_SEND_EVENT);
+        OnEffectHit += SpellEffectFn(spell_icc_spirit_alarm::HandleEvent, EFFECT_1, SPELL_EFFECT_SEND_EVENT);
     }
 };
 
@@ -1559,20 +1560,6 @@ class at_icc_shutdown_traps : public AreaTriggerScript
         }
 };
 
-class at_icc_start_blood_quickening : public AreaTriggerScript
-{
-    public:
-        at_icc_start_blood_quickening() : AreaTriggerScript("at_icc_start_blood_quickening") { }
-
-        bool OnTrigger(Player* player, AreaTriggerEntry const* /*areaTrigger*/) override
-        {
-            if (InstanceScript* instance = player->GetInstanceScript())
-                if (instance->GetData(DATA_BLOOD_QUICKENING_STATE) == NOT_STARTED)
-                    instance->SetData(DATA_BLOOD_QUICKENING_STATE, IN_PROGRESS);
-            return true;
-        }
-};
-
 class at_icc_nerubar_broodkeeper : public OnlyOnceAreaTriggerScript
 {
     public:
@@ -1619,7 +1606,7 @@ void AddSC_icecrown_citadel()
     RegisterSpellScript(spell_darkfallen_blood_mirror);
     RegisterSpellScript(spell_generic_remove_empowered_blood);
     RegisterSpellScript(spell_icc_stoneform);
-    RegisterSpellScript(spell_icc_sprit_alarm);
+    RegisterSpellScript(spell_icc_spirit_alarm);
     RegisterSpellScript(spell_frost_giant_death_plague);
     RegisterSpellScript(spell_icc_harvest_blight_specimen);
     RegisterSpellScript(spell_icc_soul_missile);
@@ -1627,6 +1614,5 @@ void AddSC_icecrown_citadel()
     // AreaTriggers
     new at_icc_saurfang_portal();
     new at_icc_shutdown_traps();
-    new at_icc_start_blood_quickening();
     new at_icc_nerubar_broodkeeper();
 }

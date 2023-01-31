@@ -484,11 +484,11 @@ public:
             }
             else
             {
-                TC_LOG_ERROR("misc", "Sending opcode that has unknown type '%s'", type.c_str());
+                TC_LOG_ERROR("misc", "Sending opcode that has unknown type '{}'", type);
                 break;
             }
         }
-        TC_LOG_DEBUG("network", "Sending opcode %u", data.GetOpcode());
+        TC_LOG_DEBUG("network", "Sending opcode {}", data.GetOpcode());
         data.hexlike();
         player->GetSession()->SendPacket(&data, true);
         handler->PSendSysMessage(LANG_COMMAND_OPCODESENT, data.GetOpcode(), unit->GetName().c_str());
@@ -546,9 +546,15 @@ public:
         if (!target)
             return false;
 
-        handler->PSendSysMessage("Loot recipient for creature %s (%s, SpawnID " UI64FMTD ") is %s",
-            target->GetName().c_str(), target->GetGUID().ToString().c_str(), target->GetSpawnId(),
-            target->hasLootRecipient() ? (target->GetLootRecipient() ? target->GetLootRecipient()->GetName().c_str() : "offline") : "no loot recipient");
+        handler->PSendSysMessage("Loot recipients for creature %s (%s, SpawnID " UI64FMTD ") are:",
+            target->GetName().c_str(), target->GetGUID().ToString().c_str(), target->GetSpawnId());
+
+        for (ObjectGuid tapperGuid : target->GetTapList())
+        {
+            Player* tapper = ObjectAccessor::GetPlayer(*target, tapperGuid);
+            handler->PSendSysMessage("* %s", tapper ? tapper->GetName().c_str() : "offline");
+        }
+
         return true;
     }
 
@@ -1199,7 +1205,7 @@ public:
     {
         Player* player = handler->GetPlayer();
 
-        TC_LOG_INFO("sql.dev", "(@PATH, XX, %.3f, %.3f, %.5f, %.5f, 0, 0, 0, 100, 0),", player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
+        TC_LOG_INFO("sql.dev", "(@PATH, XX, {:.3f}, {:.3f}, {:.5f}, {:.5f}, 0, 0, 0, 100, 0),", player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetOrientation());
 
         handler->PSendSysMessage("Waypoint SQL written to SQL Developer log");
         return true;
@@ -1207,7 +1213,7 @@ public:
 
     static bool HandleDebugTransportCommand(ChatHandler* handler, std::string operation)
     {
-        Transport* transport = handler->GetPlayer()->GetTransport();
+        Transport* transport = dynamic_cast<Transport*>(handler->GetPlayer()->GetTransport());
         if (!transport)
             return false;
 
@@ -1233,17 +1239,26 @@ public:
 
     static bool HandleDebugLoadCellsCommand(ChatHandler* handler, Optional<uint32> mapId, Optional<uint32> tileX, Optional<uint32> tileY)
     {
-        Map* map = nullptr;
         if (mapId)
         {
-            map = sMapMgr->FindBaseNonInstanceMap(*mapId);
-        }
-        else if (Player* player = handler->GetPlayer())
-        {
-            // Fallback to player's map if no map has been specified
-            map = player->GetMap();
+            sMapMgr->DoForAllMapsWithMapId(*mapId, [&](Map* map)
+            {
+                HandleDebugLoadCellsCommandHelper(handler, map, tileX, tileY);
+            });
+            return true;
         }
 
+        if (Player* player = handler->GetPlayer())
+        {
+            // Fallback to player's map if no map has been specified
+            return HandleDebugLoadCellsCommandHelper(handler, player->GetMap(), tileX, tileY);
+        }
+
+        return false;
+    }
+
+    static bool HandleDebugLoadCellsCommandHelper(ChatHandler* handler, Map* map, Optional<uint32> tileX, Optional<uint32> tileY)
+    {
         if (!map)
             return false;
 
@@ -1337,27 +1352,6 @@ public:
             return true;
         }
 
-        if (!difficulty)
-        {
-            handler->PSendSysMessage("Resetting all difficulties for '%s'.", mEntry->MapName[handler->GetSessionDbcLocale()]);
-            for (DifficultyEntry const* diff : sDifficultyStore)
-            {
-                if (sDB2Manager.GetMapDifficultyData(mapId, Difficulty(diff->ID)))
-                {
-                    handler->PSendSysMessage("Resetting difficulty %d for '%s'.", diff->ID, mEntry->MapName[handler->GetSessionDbcLocale()]);
-                    sInstanceSaveMgr->ForceGlobalReset(mapId, Difficulty(diff->ID));
-                }
-            }
-        }
-        else if (mEntry->IsNonRaidDungeon() && *difficulty == DIFFICULTY_NORMAL)
-        {
-            handler->PSendSysMessage("'%s' does not have any permanent saves for difficulty %d.", mEntry->MapName[handler->GetSessionDbcLocale()], *difficulty);
-        }
-        else
-        {
-            handler->PSendSysMessage("Resetting difficulty %d for '%s'.", *difficulty, mEntry->MapName[handler->GetSessionDbcLocale()]);
-            sInstanceSaveMgr->ForceGlobalReset(mapId, Difficulty(*difficulty));
-        }
         return true;
     }
 
@@ -1381,17 +1375,17 @@ public:
         if (daily)
         {
             sWorld->DailyReset();
-            handler->PSendSysMessage("Daily quests have been reset. Next scheduled reset: %s", TimeToHumanReadable(sWorld->getWorldState(WS_DAILY_QUEST_RESET_TIME)).c_str());
+            handler->PSendSysMessage("Daily quests have been reset. Next scheduled reset: %s", TimeToHumanReadable(sWorld->GetPersistentWorldVariable(World::NextDailyQuestResetTimeVarId)).c_str());
         }
         if (weekly)
         {
             sWorld->ResetWeeklyQuests();
-            handler->PSendSysMessage("Weekly quests have been reset. Next scheduled reset: %s", TimeToHumanReadable(sWorld->getWorldState(WS_WEEKLY_QUEST_RESET_TIME)).c_str());
+            handler->PSendSysMessage("Weekly quests have been reset. Next scheduled reset: %s", TimeToHumanReadable(sWorld->GetPersistentWorldVariable(World::NextWeeklyQuestResetTimeVarId)).c_str());
         }
         if (monthly)
         {
             sWorld->ResetMonthlyQuests();
-            handler->PSendSysMessage("Monthly quests have been reset. Next scheduled reset: %s", TimeToHumanReadable(sWorld->getWorldState(WS_MONTHLY_QUEST_RESET_TIME)).c_str());
+            handler->PSendSysMessage("Monthly quests have been reset. Next scheduled reset: %s", TimeToHumanReadable(sWorld->GetPersistentWorldVariable(World::NextMonthlyQuestResetTimeVarId)).c_str());
         }
 
         return true;
@@ -1408,7 +1402,7 @@ public:
                 nearestLoc = bg->GetClosestGraveyard(player);
             else
             {
-                if (Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(player->GetZoneId()))
+                if (Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(player->GetMap(), player->GetZoneId()))
                     nearestLoc = bf->GetClosestGraveyard(player);
                 else
                     nearestLoc = sObjectMgr->GetClosestGraveyard(*player, player->GetTeam(), player);

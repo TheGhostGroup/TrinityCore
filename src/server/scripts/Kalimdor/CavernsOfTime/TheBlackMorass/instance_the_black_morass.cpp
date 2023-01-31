@@ -108,27 +108,12 @@ public:
             _currentRiftId      = 0;
         }
 
-        void InitWorldState(bool Enable = true)
-        {
-            DoUpdateWorldState(WORLD_STATE_BM, Enable ? 1 : 0);
-            DoUpdateWorldState(WORLD_STATE_BM_SHIELD, 100);
-            DoUpdateWorldState(WORLD_STATE_BM_RIFT, 0);
-        }
-
         bool IsEncounterInProgress() const override
         {
             if (GetData(TYPE_MEDIVH) == IN_PROGRESS)
                 return true;
 
             return false;
-        }
-
-        void OnPlayerEnter(Player* player) override
-        {
-            if (GetData(TYPE_MEDIVH) == IN_PROGRESS)
-                return;
-
-            player->SendUpdateWorldState(WORLD_STATE_BM, 0);
         }
 
         void OnCreatureCreate(Creature* creature) override
@@ -192,7 +177,7 @@ public:
                     if (data == IN_PROGRESS)
                     {
                         TC_LOG_DEBUG("scripts", "Instance The Black Morass: Starting event.");
-                        InitWorldState();
+                        DoUpdateWorldState(WORLD_STATE_BM, 1);
                         m_auiEncounter[1] = IN_PROGRESS;
                         ScheduleEventNextPortal(15s);
                     }
@@ -265,7 +250,7 @@ public:
             if (entry == RIFT_BOSS)
                 entry = RandRiftBoss();
 
-            TC_LOG_DEBUG("scripts", "Instance The Black Morass: Summoning rift boss entry %u.", entry);
+            TC_LOG_DEBUG("scripts", "Instance The Black Morass: Summoning rift boss entry {}.", entry);
 
             Position pos = me->GetRandomNearPosition(10.0f);
 
@@ -288,7 +273,7 @@ public:
                 if (tmp >= _currentRiftId)
                     ++tmp;
 
-                TC_LOG_DEBUG("scripts", "Instance The Black Morass: Creating Time Rift at locationId %i (old locationId was %u).", tmp, _currentRiftId);
+                TC_LOG_DEBUG("scripts", "Instance The Black Morass: Creating Time Rift at locationId {} (old locationId was {}).", tmp, _currentRiftId);
 
                 _currentRiftId = tmp;
 

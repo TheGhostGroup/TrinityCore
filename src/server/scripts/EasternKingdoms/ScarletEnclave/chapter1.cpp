@@ -26,6 +26,7 @@
 #include "MotionMaster.h"
 #include "MoveSplineInit.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "PassiveAI.h"
 #include "Player.h"
 #include "ScriptedCreature.h"
@@ -223,7 +224,7 @@ public:
                     else
                     {
                         me->GetMotionMaster()->MovePoint(1, anchorX, anchorY, me->GetPositionZ());
-                        //TC_LOG_DEBUG("scripts", "npc_unworthy_initiateAI: move to %f %f %f", anchorX, anchorY, me->GetPositionZ());
+                        //TC_LOG_DEBUG("scripts", "npc_unworthy_initiateAI: move to {} {} {}", anchorX, anchorY, me->GetPositionZ());
                         phase = PHASE_EQUIPING;
                         wait_timer = 0;
                     }
@@ -476,14 +477,16 @@ struct npc_eye_of_acherus : public ScriptedAI
                     break;
                 case EVENT_LAUNCH_TOWARDS_DESTINATION:
                 {
-                    Movement::PointsArray path(EyeOfAcherusPath, EyeOfAcherusPath + EyeOfAcherusPathSize);
-                    Movement::MoveSplineInit init(me);
-                    init.MovebyPath(path);
-                    init.SetFly();
-                    if (Unit* owner = me->GetCharmerOrOwner())
-                        init.SetVelocity(owner->GetSpeed(MOVE_RUN));
+                    std::function<void(Movement::MoveSplineInit&)> initializer = [=, me = me](Movement::MoveSplineInit& init)
+                    {
+                        Movement::PointsArray path(EyeOfAcherusPath, EyeOfAcherusPath + EyeOfAcherusPathSize);
+                        init.MovebyPath(path);
+                        init.SetFly();
+                        if (Unit* owner = me->GetCharmerOrOwner())
+                            init.SetVelocity(owner->GetSpeed(MOVE_RUN));
+                    };
 
-                    me->GetMotionMaster()->LaunchMoveSpline(std::move(init), POINT_NEW_AVALON, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
+                    me->GetMotionMaster()->LaunchMoveSpline(std::move(initializer), POINT_NEW_AVALON, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
                     break;
                 }
                 case EVENT_GRANT_CONTROL:
@@ -675,6 +678,8 @@ public:
 
         bool OnGossipHello(Player* player) override
         {
+            uint32 gossipMenuId = Player::GetDefaultGossipMenuForSource(me);
+            InitGossipMenuFor(player, gossipMenuId);
             if (player->GetQuestStatus(QUEST_DEATH_CHALLENGE) == QUEST_STATUS_INCOMPLETE && me->IsFullHealth())
             {
                 if (player->HealthBelowPct(10))
@@ -683,7 +688,7 @@ public:
                 if (player->IsInCombat() || me->IsInCombat())
                     return true;
 
-                AddGossipItemFor(player, Player::GetDefaultGossipMenuForSource(me), 0, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
+                AddGossipItemFor(player, gossipMenuId, 0, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
                 SendGossipMenuFor(player, player->GetGossipTextId(me), me->GetGUID());
             }
             return true;
@@ -775,11 +780,8 @@ private:
 
 enum SalanarTheHorseman
 {
-    GOSSIP_SALANAR_MENU               = 9739,
-    GOSSIP_SALANAR_OPTION             = 0,
     SALANAR_SAY                       = 0,
     QUEST_INTO_REALM_OF_SHADOWS       = 12687,
-    NPC_SALANAR_IN_REALM_OF_SHADOWS   = 28788,
     SPELL_EFFECT_STOLEN_HORSE         = 52263,
     SPELL_DELIVER_STOLEN_HORSE        = 52264,
     SPELL_CALL_DARK_RIDER             = 52266,
@@ -796,16 +798,6 @@ public:
     {
         npc_salanar_the_horsemanAI(Creature* creature) : ScriptedAI(creature) { }
 
-        bool OnGossipSelect(Player* player, uint32 menuId, uint32 gossipListId) override
-        {
-            if (menuId == GOSSIP_SALANAR_MENU && gossipListId == GOSSIP_SALANAR_OPTION)
-            {
-                player->CastSpell(player, SPELL_REALM_OF_SHADOWS, true);
-                player->PlayerTalkClass->SendCloseGossip();
-            }
-            return false;
-        }
-
         void MoveInLineOfSight(Unit* who) override
         {
             ScriptedAI::MoveInLineOfSight(who);
@@ -816,8 +808,7 @@ public:
                 {
                     if (Player* player = charmer->ToPlayer())
                     {
-                        // for quest Into the Realm of Shadows(QUEST_INTO_REALM_OF_SHADOWS)
-                        if (me->GetEntry() == NPC_SALANAR_IN_REALM_OF_SHADOWS && player->GetQuestStatus(QUEST_INTO_REALM_OF_SHADOWS) == QUEST_STATUS_INCOMPLETE)
+                        if (player->GetQuestStatus(QUEST_INTO_REALM_OF_SHADOWS) == QUEST_STATUS_INCOMPLETE)
                         {
                             player->GroupEventHappens(QUEST_INTO_REALM_OF_SHADOWS, me);
                             Talk(SALANAR_SAY);
@@ -1114,6 +1105,47 @@ class spell_gift_of_the_harvester : public SpellScript
     }
 };
 
+/*######
+## Quest 12842: Runeforging: Preparation For Battle
+######*/
+
+enum Runeforging
+{
+    SPELL_RUNEFORGING_CREDIT     = 54586,
+    QUEST_RUNEFORGING            = 12842
+};
+
+/* 53343 - Rune of Razorice
+   53344 - Rune of the Fallen Crusader
+   62158 - Rune of the Stoneskin Gargoyle
+   326805 - Rune of Sanguination
+   326855 - Rune of Spellwarding
+   326911 - Rune of Hysteria
+   326977 - Rune of Unending Thirst
+   327082 - Rune of the Apocalypse */
+class spell_chapter1_runeforging_credit : public SpellScript
+{
+    PrepareSpellScript(spell_chapter1_runeforging_credit);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_RUNEFORGING_CREDIT }) &&
+            sObjectMgr->GetQuestTemplate(QUEST_RUNEFORGING);
+    }
+
+    void HandleDummy(SpellEffIndex /*effIndex*/)
+    {
+        if (Player* caster = GetCaster()->ToPlayer())
+            if (caster->GetQuestStatus(QUEST_RUNEFORGING) == QUEST_STATUS_INCOMPLETE)
+                caster->CastSpell(caster, SPELL_RUNEFORGING_CREDIT);
+    }
+
+    void Register() override
+    {
+        OnEffectHit += SpellEffectFn(spell_chapter1_runeforging_credit::HandleDummy, EFFECT_1, SPELL_EFFECT_DUMMY);
+    }
+};
+
 void AddSC_the_scarlet_enclave_c1()
 {
     new npc_unworthy_initiate();
@@ -1130,4 +1162,5 @@ void AddSC_the_scarlet_enclave_c1()
     new npc_dkc1_gothik();
     RegisterCreatureAI(npc_scarlet_ghoul);
     RegisterSpellScript(spell_gift_of_the_harvester);
+    RegisterSpellScript(spell_chapter1_runeforging_credit);
 }

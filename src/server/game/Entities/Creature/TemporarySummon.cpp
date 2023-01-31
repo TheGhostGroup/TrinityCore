@@ -25,6 +25,7 @@
 #include "Log.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Pet.h"
 #include "Player.h"
 #include "SmoothPhasing.h"
@@ -173,7 +174,7 @@ void TempSummon::Update(uint32 diff)
         }
         default:
             UnSummon();
-            TC_LOG_ERROR("entities.unit", "Temporary summoned creature (entry: %u) have unknown type %u of ", GetEntry(), m_type);
+            TC_LOG_ERROR("entities.unit", "Temporary summoned creature (entry: {}) have unknown type {} of ", GetEntry(), m_type);
             break;
     }
 }
@@ -193,6 +194,19 @@ void TempSummon::InitStats(uint32 duration)
     if (owner && IsTrigger() && m_spells[0])
         if (owner->GetTypeId() == TYPEID_PLAYER)
             m_ControlledByPlayer = true;
+
+    if (owner && owner->IsPlayer())
+    {
+        if (CreatureSummonedData const* summonedData = sObjectMgr->GetCreatureSummonedData(GetEntry()))
+        {
+            m_creatureIdVisibleToSummoner = summonedData->CreatureIDVisibleToSummoner;
+            if (summonedData->CreatureIDVisibleToSummoner)
+            {
+                CreatureTemplate const* creatureTemplateVisibleToSummoner = ASSERT_NOTNULL(sObjectMgr->GetCreatureTemplate(*summonedData->CreatureIDVisibleToSummoner));
+                m_displayIdVisibleToSummoner = ObjectMgr::ChooseDisplayId(creatureTemplateVisibleToSummoner, nullptr)->CreatureDisplayID;
+            }
+        }
+    }
 
     if (!m_Properties)
         return;
@@ -348,7 +362,7 @@ void TempSummon::RemoveFromWorld()
     }
 
     //if (GetOwnerGUID())
-    //    TC_LOG_ERROR("entities.unit", "Unit %u has owner guid when removed from world", GetEntry());
+    //    TC_LOG_ERROR("entities.unit", "Unit {} has owner guid when removed from world", GetEntry());
 
     Creature::RemoveFromWorld();
 }

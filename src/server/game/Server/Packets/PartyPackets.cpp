@@ -423,14 +423,15 @@ ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Party::PartyPlayerInfo co
 {
     data.WriteBits(playerInfo.Name.size(), 6);
     data.WriteBits(playerInfo.VoiceStateID.size() + 1, 6);
-    data.WriteBit(playerInfo.FromSocialQueue);
+    data.WriteBit(playerInfo.Connected);
     data.WriteBit(playerInfo.VoiceChatSilenced);
+    data.WriteBit(playerInfo.FromSocialQueue);
     data << playerInfo.GUID;
-    data << uint8(playerInfo.Status);
     data << uint8(playerInfo.Subgroup);
     data << uint8(playerInfo.Flags);
     data << uint8(playerInfo.RolesAssigned);
     data << uint8(playerInfo.Class);
+    data << uint8(playerInfo.FactionGroup);
     data.WriteString(playerInfo.Name);
     if (!playerInfo.VoiceStateID.empty())
         data << playerInfo.VoiceStateID;
@@ -482,6 +483,7 @@ WorldPacket const* WorldPackets::Party::PartyUpdate::Write()
     _worldPacket << PartyGUID;
     _worldPacket << uint32(SequenceNum);
     _worldPacket << LeaderGUID;
+    _worldPacket << uint8(LeaderFactionGroup);
     _worldPacket << uint32(PlayerList.size());
     _worldPacket.WriteBit(LfgInfos.has_value());
     _worldPacket.WriteBit(LootSettings.has_value());

@@ -17,6 +17,7 @@
 
 #include "Trainer.h"
 #include "BattlePetMgr.h"
+#include "ConditionMgr.h"
 #include "Creature.h"
 #include "Log.h"
 #include "NPCPackets.h"
@@ -54,7 +55,7 @@ namespace Trainer
 
             if (!sConditionMgr->IsObjectMeetingTrainerSpellConditions(_id, trainerSpell.SpellId, player))
             {
-                TC_LOG_DEBUG("condition", "SendSpells: conditions not met for trainer id %u spell %u player '%s' (%s)", _id, trainerSpell.SpellId, player->GetName().c_str(), player->GetGUID().ToString().c_str());
+                TC_LOG_DEBUG("condition", "SendSpells: conditions not met for trainer id {} spell {} player '{}' ({})", _id, trainerSpell.SpellId, player->GetName(), player->GetGUID().ToString());
                 continue;
             }
 
@@ -82,7 +83,7 @@ namespace Trainer
         }
 
         bool sendSpellVisual = true;
-        BattlePetSpeciesEntry const* speciesEntry = sSpellMgr->GetBattlePetSpecies(trainerSpell->SpellId);
+        BattlePetSpeciesEntry const* speciesEntry = BattlePets::BattlePetMgr::GetBattlePetSpeciesBySpell(trainerSpell->SpellId);
         if (speciesEntry)
         {
             if (player->GetSession()->GetBattlePetMgr()->HasMaxPetCount(speciesEntry, player->GetGUID()))

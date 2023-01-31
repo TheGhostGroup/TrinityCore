@@ -108,6 +108,8 @@ float CONF_flat_liquid_delta_limit = 0.001f; // If max - min less this value - l
 uint32 CONF_Locale = 0;
 
 char const* CONF_Product = "wow";
+char const* CONF_Region = "eu";
+bool CONF_UseRemoteCasc = false;
 
 #define CASC_LOCALES_COUNT 17
 
@@ -161,6 +163,8 @@ void Usage(char const* prg)
         "-f height stored as int (less map size but lost some accuracy) 1 by default\n"\
         "-l dbc locale\n"\
         "-p which installed product to open (wow/wowt/wow_beta)\n"\
+        "-c use remote casc\n"\
+        "-r set remote casc region - standard: eu\n"\
         "Example: %s -f 0 -i \"c:\\games\\game\"\n", prg, prg);
     exit(1);
 }
@@ -175,6 +179,8 @@ void HandleArgs(int argc, char* arg[])
         // f - use float to int conversion
         // h - limit minimum height
         // l - dbc locale
+        // c - use remote casc
+        // r - set casc remote region - standard: eu
         if (arg[c][0] != '-')
             Usage(arg[0]);
 
@@ -222,6 +228,18 @@ void HandleArgs(int argc, char* arg[])
             case 'p':
                 if (c + 1 < argc && strlen(arg[c + 1]))      // all ok
                     CONF_Product = arg[++c];
+                else
+                    Usage(arg[0]);
+                break;
+            case 'c':
+                if (c + 1 < argc)                            // all ok
+                    CONF_UseRemoteCasc = atoi(arg[c++ + 1]) != 0;
+                else
+                    Usage(arg[0]);
+                break;
+            case 'r':
+                if (c + 1 < argc && strlen(arg[c + 1]))      // all ok
+                    CONF_Region = arg[c++ + 1];
                 else
                     Usage(arg[0]);
                 break;
@@ -1013,7 +1031,7 @@ bool ConvertADT(uint32 fileDataId, std::string const& mapName, std::string const
 {
     ChunkedFile adt;
 
-    if (!adt.loadFile(CascStorage, fileDataId, Trinity::StringFormat("Map %s grid [%u,%u]", mapName.c_str(), gx, gy)))
+    if (!adt.loadFile(CascStorage, fileDataId, Trinity::StringFormat("Map {} grid [{},{}]", mapName, gx, gy)))
         return false;
 
     return ConvertADT(adt, mapName, outputPath, gx, gy, build, ignoreDeepWater);
@@ -1067,7 +1085,7 @@ void ExtractMaps(uint32 build)
         // Loadup map grid data
         ChunkedFile wdt;
         std::bitset<(WDT_MAP_SIZE) * (WDT_MAP_SIZE)> existingTiles;
-        if (wdt.loadFile(CascStorage, map_ids[z].WdtFileDataId, Trinity::StringFormat("WDT for map %u", map_ids[z].Id), false))
+        if (wdt.loadFile(CascStorage, map_ids[z].WdtFileDataId, Trinity::StringFormat("WDT for map {}", map_ids[z].Id), false))
         {
             FileChunk* mphd = wdt.GetChunk("MPHD");
             FileChunk* main = wdt.GetChunk("MAIN");
@@ -1079,7 +1097,7 @@ void ExtractMaps(uint32 build)
                     if (!(main->As<wdt_MAIN>()->adt_list[y][x].flag & 0x1))
                         continue;
 
-                    outputFileName = Trinity::StringFormat("%s/maps/%04u_%02u_%02u.map", output_path.string().c_str(), map_ids[z].Id, y, x);
+                    outputFileName = Trinity::StringFormat("{}/maps/{:04}_{:02}_{:02}.map", output_path.string(), map_ids[z].Id, y, x);
                     bool ignoreDeepWater = IsDeepWaterIgnored(map_ids[z].Id, y, x);
                     if (mphd && mphd->As<wdt_MPHD>()->flags & 0x200)
                     {
@@ -1087,7 +1105,7 @@ void ExtractMaps(uint32 build)
                     }
                     else
                     {
-                        std::string storagePath = Trinity::StringFormat(R"(World\Maps\%s\%s_%u_%u.adt)", map_ids[z].Directory.c_str(), map_ids[z].Directory.c_str(), x, y);
+                        std::string storagePath = Trinity::StringFormat(R"(World\Maps\{}\{}_{}_{}.adt)", map_ids[z].Directory, map_ids[z].Directory, x, y);
                         existingTiles[y * WDT_MAP_SIZE + x] = ConvertADT(storagePath, map_ids[z].Name, outputFileName, y, x, build, ignoreDeepWater);
                     }
                 }
@@ -1098,7 +1116,7 @@ void ExtractMaps(uint32 build)
             }
         }
 
-        if (FILE* tileList = fopen(Trinity::StringFormat("%s/maps/%04u.tilelist", output_path.string().c_str(), map_ids[z].Id).c_str(), "wb"))
+        if (FILE* tileList = fopen(Trinity::StringFormat("{}/maps/{:04}.tilelist", output_path.string(), map_ids[z].Id).c_str(), "wb"))
         {
             fwrite(MapMagic.data(), 1, MapMagic.size(), tileList);
             fwrite(&MapVersionMagic, 1, sizeof(MapVersionMagic), tileList);
@@ -1289,7 +1307,7 @@ void ExtractCameraFiles()
         std::unique_ptr<CASC::File> cameraFile(CascStorage->OpenFile(cameraFileDataId, CASC_LOCALE_NONE));
         if (cameraFile)
         {
-            boost::filesystem::path filePath = outputPath / Trinity::StringFormat("FILE%08X.xxx", cameraFileDataId);
+            boost::filesystem::path filePath = outputPath / Trinity::StringFormat("FILE{:08X}.xxx", cameraFileDataId);
 
             if (!boost::filesystem::exists(filePath))
                 if (ExtractFile(cameraFile.get(), filePath.string()))
@@ -1318,10 +1336,9 @@ void ExtractGameTables()
         { 1391662, "ArtifactLevelXP.txt" },
         { 1391663, "BarberShopCostBase.txt" },
         { 1391664, "BaseMp.txt" },
+        { 4494528, "BaseProfessionRatings.txt" },
         { 1391665, "BattlePetTypeDamageMod.txt" },
         { 1391666, "BattlePetXP.txt" },
-        { 1391667, "ChallengeModeDamage.txt" },
-        { 1391668, "ChallengeModeHealth.txt" },
         { 1391669, "CombatRatings.txt" },
         { 1391670, "CombatRatingsMultByILvl.txt" },
         { 1391671, "HonorLevel.txt" },
@@ -1330,6 +1347,7 @@ void ExtractGameTables()
         { 1726830, "ItemLevelSquish.txt" },
         { 1391643, "ItemSocketCostPerLevel.txt" },
         { 1391651, "NPCManaCostScaler.txt" },
+        { 4492239, "ProfessionRatings.txt" },
         { 1391659, "SandboxScaling.txt" },
         { 1391660, "SpellScaling.txt" },
         { 1980632, "StaminaMultByILvl.txt" },
@@ -1359,6 +1377,16 @@ bool OpenCascStorage(int locale)
 {
     try
     {
+        if (CONF_UseRemoteCasc)
+        {
+            boost::filesystem::path const cache_dir(boost::filesystem::canonical(input_path) / "CascCache");
+            CascStorage.reset(CASC::Storage::OpenRemote(cache_dir, WowLocaleToCascLocaleFlags[locale], CONF_Product, CONF_Region));
+            if (CascStorage)
+                return true;
+
+            printf("Unable to open remote casc fallback to local casc\n");
+        }
+
         boost::filesystem::path const storage_dir(boost::filesystem::canonical(input_path) / "Data");
         CascStorage.reset(CASC::Storage::Open(storage_dir, WowLocaleToCascLocaleFlags[locale], CONF_Product));
         if (!CascStorage)
@@ -1380,6 +1408,16 @@ uint32 GetInstalledLocalesMask()
 {
     try
     {
+        if (CONF_UseRemoteCasc)
+        {
+            boost::filesystem::path const cache_dir(boost::filesystem::canonical(input_path) / "CascCache");
+            std::unique_ptr<CASC::Storage> storage(CASC::Storage::OpenRemote(cache_dir, CASC_LOCALE_ALL_WOW, CONF_Product, CONF_Region));
+            if (storage)
+                return CASC_LOCALE_ALL_WOW;
+
+            printf("Unable to open remote casc fallback to local casc\n");
+        }
+
         boost::filesystem::path const storage_dir(boost::filesystem::canonical(input_path) / "Data");
         std::unique_ptr<CASC::Storage> storage(CASC::Storage::Open(storage_dir, CASC_LOCALE_ALL_WOW, CONF_Product));
         if (!storage)
@@ -1397,6 +1435,9 @@ uint32 GetInstalledLocalesMask()
 
 static bool RetardCheck()
 {
+    if (CONF_UseRemoteCasc)
+        return true;
+
     try
     {
         boost::filesystem::path storageDir(boost::filesystem::canonical(input_path) / "Data");

@@ -26,8 +26,6 @@
 #include "TaskScheduler.h"
 #include "ScriptMgr.h"
 #include "TemporarySummon.h"
-#include "WorldStatePackets.h"
-#include <sstream>
 
 /*
  * TODO:
@@ -191,6 +189,13 @@ MinionData const minionData[] =
     { 0,                0           } // END
 };
 
+DungeonEncounterData const encounters[] =
+{
+    { DATA_1ST_BOSS, {{ 2019 }} },
+    { DATA_2ND_BOSS, {{ 2018 }} },
+    { DATA_CYANIGOSA, {{ 2020 }} }
+};
+
 class instance_violet_hold : public InstanceMapScript
 {
     public:
@@ -198,15 +203,15 @@ class instance_violet_hold : public InstanceMapScript
 
         struct instance_violet_hold_InstanceMapScript : public InstanceScript
         {
-            instance_violet_hold_InstanceMapScript(InstanceMap* map) : InstanceScript(map)
+            instance_violet_hold_InstanceMapScript(InstanceMap* map) : InstanceScript(map),
+                FirstBossId(*this, "FirstBossId", 0),
+                SecondBossId(*this, "SecondBossId", 0)
             {
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
                 LoadObjectData(creatureData, gameObjectData);
                 LoadMinionData(minionData);
-
-                FirstBossId         = 0;
-                SecondBossId        = 0;
+                LoadDungeonEncounterData(encounters);
 
                 DoorIntegrity       = 100;
                 WaveCount           = 0;
@@ -291,13 +296,6 @@ class instance_violet_hold : public InstanceMapScript
                     default:
                         break;
                 }
-            }
-
-            void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& packet) override
-            {
-                packet.Worldstates.emplace_back(WORLD_STATE_VH_SHOW, EventState == IN_PROGRESS ? 1 : 0);
-                packet.Worldstates.emplace_back(WORLD_STATE_VH_PRISON_STATE, DoorIntegrity);
-                packet.Worldstates.emplace_back(WORLD_STATE_VH_WAVE_COUNT, WaveCount);
             }
 
             bool CheckRequiredBosses(uint32 bossId, Player const* player = nullptr) const override
@@ -802,17 +800,6 @@ class instance_violet_hold : public InstanceMapScript
                 }
             }
 
-            void WriteSaveDataMore(std::ostringstream& data) override
-            {
-                data << FirstBossId << ' ' << SecondBossId;
-            }
-
-            void ReadSaveDataMore(std::istringstream& data) override
-            {
-                data >> FirstBossId;
-                data >> SecondBossId;
-            }
-
             bool CheckWipe() const
             {
                 Map::PlayerList const& players = instance->GetPlayers();
@@ -951,8 +938,8 @@ class instance_violet_hold : public InstanceMapScript
             static uint8 const ActivationCrystalCount = 5;
             ObjectGuid ActivationCrystalGUIDs[ActivationCrystalCount];
 
-            uint32 FirstBossId;
-            uint32 SecondBossId;
+            PersistentInstanceScriptValue<uint32> FirstBossId;
+            PersistentInstanceScriptValue<uint32> SecondBossId;
 
             uint8 DoorIntegrity;
             uint8 WaveCount;

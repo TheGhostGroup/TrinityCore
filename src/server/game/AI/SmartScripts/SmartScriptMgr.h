@@ -33,7 +33,7 @@ typedef uint32 SAIBool;
 enum eSmartAI
 {
     SMART_EVENT_PARAM_COUNT = 4,
-    SMART_ACTION_PARAM_COUNT = 6,
+    SMART_ACTION_PARAM_COUNT = 7,
     SMART_SUMMON_COUNTER = 0xFFFFFF,
     SMART_ESCORT_LAST_OOC_POINT = 0xFFFFFF,
     SMART_RANDOM_POINT = 0xFFFFFE,
@@ -184,8 +184,9 @@ enum SMART_EVENT
     SMART_EVENT_ON_SPELL_CAST            = 83,      // SpellID, CooldownMin, CooldownMax
     SMART_EVENT_ON_SPELL_FAILED          = 84,      // SpellID, CooldownMin, CooldownMax
     SMART_EVENT_ON_SPELL_START           = 85,      // SpellID, CooldownMin, CooldownMax
+    SMART_EVENT_ON_DESPAWN               = 86,      // NONE
 
-    SMART_EVENT_END                      = 86
+    SMART_EVENT_END                      = 87
 };
 
 struct SmartEvent
@@ -550,7 +551,7 @@ enum SMART_ACTION
     SMART_ACTION_SET_DYNAMIC_FLAG                   = 94,     // UNUSED, DO NOT REUSE
     SMART_ACTION_ADD_DYNAMIC_FLAG                   = 95,     // UNUSED, DO NOT REUSE
     SMART_ACTION_REMOVE_DYNAMIC_FLAG                = 96,     // UNUSED, DO NOT REUSE
-    SMART_ACTION_JUMP_TO_POS                        = 97,     // speedXY, speedZ, targetX, targetY, targetZ
+    SMART_ACTION_JUMP_TO_POS                        = 97,     // SpeedXY, SpeedZ, Gravity, UseDefaultGravity, PointId, ContactDistance
     SMART_ACTION_SEND_GOSSIP_MENU                   = 98,     // menuId, optionId
     SMART_ACTION_GO_SET_LOOT_STATE                  = 99,     // state
     SMART_ACTION_SEND_TARGET_TO_TARGET              = 100,    // id
@@ -567,7 +568,7 @@ enum SMART_ACTION
     SMART_ACTION_GAME_EVENT_STOP                    = 111,    // GameEventId
     SMART_ACTION_GAME_EVENT_START                   = 112,    // GameEventId
     SMART_ACTION_START_CLOSEST_WAYPOINT             = 113,    // wp1, wp2, wp3, wp4, wp5, wp6, wp7
-    SMART_ACTION_MOVE_OFFSET                        = 114,
+    SMART_ACTION_MOVE_OFFSET                        = 114,    // PointId
     SMART_ACTION_RANDOM_SOUND                       = 115,    // soundId1, soundId2, soundId3, soundId4, soundId5, onlySelf
     SMART_ACTION_SET_CORPSE_DELAY                   = 116,    // timer
     SMART_ACTION_DISABLE_EVADE                      = 117,    // 0/1 (1 = disabled, 0 = enabled)
@@ -604,7 +605,8 @@ enum SMART_ACTION
     SMART_ACTION_ADD_TO_STORED_TARGET_LIST          = 148,    // varID
     SMART_ACTION_BECOME_PERSONAL_CLONE_FOR_PLAYER   = 149,    // summonType 1-8, duration in ms
     SMART_ACTION_TRIGGER_GAME_EVENT                 = 150,    // eventId, useSaiTargetAsGameEventSource
-    SMART_ACTION_END                                = 151
+    SMART_ACTION_DO_ACTION                          = 151,    // actionId
+    SMART_ACTION_END                                = 152
 };
 
 enum class SmartActionSummonCreatureFlags
@@ -984,8 +986,12 @@ struct SmartAction
 
         struct
         {
-            uint32 speedxy;
-            uint32 speedz;
+            uint32 SpeedXY;
+            uint32 SpeedZ;
+            uint32 Gravity;
+            SAIBool UseDefaultGravity;
+            uint32 PointId;
+            uint32 ContactDistance;
         } jump;
 
         struct
@@ -1069,6 +1075,11 @@ struct SmartAction
         {
             uint32 wps[SMART_ACTION_PARAM_COUNT];
         } closestWaypointFromList;
+
+        struct
+        {
+            uint32 PointId;
+        } moveOffset;
 
         struct
         {
@@ -1224,6 +1235,11 @@ struct SmartAction
             SAIBool useSaiTargetAsGameEventSource;
         } triggerGameEvent;
 
+        struct
+        {
+            uint32 actionId;
+        } doAction;
+
         //! Note for any new future actions
         //! All parameters must have type uint32
 
@@ -1235,6 +1251,7 @@ struct SmartAction
             uint32 param4;
             uint32 param5;
             uint32 param6;
+            uint32 param7;
         } raw;
     };
 };
@@ -1563,6 +1580,7 @@ const uint32 SmartAIEventMask[SMART_EVENT_END][2] =
     {SMART_EVENT_ON_SPELL_CAST,             SMART_SCRIPT_TYPE_MASK_CREATURE },
     {SMART_EVENT_ON_SPELL_FAILED,           SMART_SCRIPT_TYPE_MASK_CREATURE },
     {SMART_EVENT_ON_SPELL_START,            SMART_SCRIPT_TYPE_MASK_CREATURE },
+    {SMART_EVENT_ON_DESPAWN,                SMART_SCRIPT_TYPE_MASK_CREATURE },
 };
 
 enum SmartEventFlags

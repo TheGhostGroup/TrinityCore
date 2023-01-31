@@ -112,7 +112,7 @@ void WaypointMovementGenerator<Creature>::DoInitialize(Creature* owner)
 
     if (!_path)
     {
-        TC_LOG_ERROR("sql.sql", "WaypointMovementGenerator::DoInitialize: couldn't load path for creature (%s) (_pathId: %u)", owner->GetGUID().ToString().c_str(), _pathId);
+        TC_LOG_ERROR("sql.sql", "WaypointMovementGenerator::DoInitialize: couldn't load path for creature ({}) (_pathId: {})", owner->GetGUID().ToString(), _pathId);
         return;
     }
 
@@ -250,7 +250,7 @@ void WaypointMovementGenerator<Creature>::OnArrived(Creature* owner)
 
     if (waypoint.eventId && urand(0, 99) < waypoint.eventChance)
     {
-        TC_LOG_DEBUG("maps.script", "Creature movement start script %u at point %u for %s.", waypoint.eventId, _currentNode, owner->GetGUID().ToString().c_str());
+        TC_LOG_DEBUG("maps.script", "Creature movement start script {} at point {} for {}.", waypoint.eventId, _currentNode, owner->GetGUID().ToString());
         owner->ClearUnitState(UNIT_STATE_ROAMING_MOVE);
         owner->GetMap()->ScriptsStart(sWaypointScripts, waypoint.eventId, owner, nullptr);
     }
@@ -301,9 +301,9 @@ void WaypointMovementGenerator<Creature>::StartMove(Creature* owner, bool relaun
                 owner->SetHomePosition(x, y, z, o);
             else
             {
-                if (Transport* trans = owner->GetTransport())
+                if (TransportBase* trans = owner->GetTransport())
                 {
-                    o -= trans->GetOrientation();
+                    o -= trans->GetTransportOrientation();
                     owner->SetTransportHomePosition(x, y, z, o);
                     trans->CalculatePassengerPosition(x, y, z, &o);
                     owner->SetHomePosition(x, y, z, o);
@@ -345,9 +345,8 @@ void WaypointMovementGenerator<Creature>::StartMove(Creature* owner, bool relaun
     //! but formationDest contains global coordinates
     init.MoveTo(waypoint.x, waypoint.y, waypoint.z);
 
-    //! Accepts angles such as 0.00001 and -0.00001, 0 must be ignored, default value in waypoint table
-    if (waypoint.orientation && waypoint.delay)
-        init.SetFacing(waypoint.orientation);
+    if (waypoint.orientation.has_value() && waypoint.delay > 0)
+        init.SetFacing(*waypoint.orientation);
 
     switch (waypoint.moveType)
     {

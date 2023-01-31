@@ -338,10 +338,7 @@ public:
         return _guildCriteriasByType[size_t(type)];
     }
 
-    CriteriaList const& GetScenarioCriteriaByType(CriteriaType type) const
-    {
-        return _scenarioCriteriasByType[size_t(type)];
-    }
+    CriteriaList const& GetScenarioCriteriaByTypeAndScenario(CriteriaType type, uint32 scenarioId) const;
 
     CriteriaList const& GetQuestObjectiveCriteriaByType(CriteriaType type) const
     {
@@ -415,10 +412,11 @@ private:
     std::unordered_map<uint32, CriteriaTreeList> _criteriaTreeByCriteria;
 
     // store criterias by type to speed up lookup
+    static CriteriaList const EmptyCriteriaList;
     CriteriaList _criteriasByType[size_t(CriteriaType::Count)];
     CriteriaListByAsset _criteriasByAsset[size_t(CriteriaType::Count)];
     CriteriaList _guildCriteriasByType[size_t(CriteriaType::Count)];
-    CriteriaList _scenarioCriteriasByType[size_t(CriteriaType::Count)];
+    CriteriaListByAsset _scenarioCriteriasByTypeAndScenarioId[size_t(CriteriaType::Count)];
     CriteriaList _questObjectiveCriteriasByType[size_t(CriteriaType::Count)];
 
     CriteriaList _criteriasByTimedType[size_t(CriteriaStartEvent::Count)];

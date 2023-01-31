@@ -39,6 +39,7 @@ enum HunterSpells
     SPELL_HUNTER_EXHILARATION                       = 109304,
     SPELL_HUNTER_EXHILARATION_PET                   = 128594,
     SPELL_HUNTER_EXHILARATION_R2                    = 231546,
+    SPELL_HUNTER_EXPLOSIVE_SHOT_DAMAGE              = 212680,
     SPELL_HUNTER_LONE_WOLF                          = 155228,
     SPELL_HUNTER_MASTERS_CALL_TRIGGERED             = 62305,
     SPELL_HUNTER_MISDIRECTION                       = 34477,
@@ -47,6 +48,8 @@ enum HunterSpells
     SPELL_HUNTER_PET_LAST_STAND_TRIGGERED           = 53479,
     SPELL_HUNTER_PET_HEART_OF_THE_PHOENIX_TRIGGERED = 54114,
     SPELL_HUNTER_PET_HEART_OF_THE_PHOENIX_DEBUFF    = 55711,
+    SPELL_HUNTER_POSTHASTE_INCREASE_SPEED           = 118922,
+    SPELL_HUNTER_POSTHASTE_TALENT                   = 109215,
     SPELL_HUNTER_STEADY_SHOT_FOCUS                  = 77443,
     SPELL_HUNTER_T9_4P_GREATNESS                    = 68130,
     SPELL_ROAR_OF_SACRIFICE_TRIGGERED               = 67481
@@ -147,6 +150,28 @@ class spell_hun_exhilaration : public SpellScript
     void Register() override
     {
         OnHit += SpellHitFn(spell_hun_exhilaration::HandleOnHit);
+    }
+};
+
+// 212431 - Explosive Shot
+class spell_hun_explosive_shot : public AuraScript
+{
+    PrepareAuraScript(spell_hun_explosive_shot);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_HUNTER_EXPLOSIVE_SHOT_DAMAGE });
+    }
+
+    void HandlePeriodic(AuraEffect const* /*aurEff*/)
+    {
+        if (Unit* caster = GetCaster())
+            caster->CastSpell(GetTarget(), SPELL_HUNTER_EXPLOSIVE_SHOT_DAMAGE, true);
+    }
+
+    void Register() override
+    {
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_hun_explosive_shot::HandlePeriodic, EFFECT_0, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
@@ -383,6 +408,31 @@ class spell_hun_pet_heart_of_the_phoenix : public SpellScript
     }
 };
 
+// 781 - Disengage
+class spell_hun_posthaste : public SpellScript
+{
+    PrepareSpellScript(spell_hun_posthaste);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_HUNTER_POSTHASTE_TALENT, SPELL_HUNTER_POSTHASTE_INCREASE_SPEED });
+    }
+
+    void HandleAfterCast()
+    {
+        if (GetCaster()->HasAura(SPELL_HUNTER_POSTHASTE_TALENT))
+        {
+            GetCaster()->RemoveMovementImpairingAuras(true);
+            GetCaster()->CastSpell(GetCaster(), SPELL_HUNTER_POSTHASTE_INCREASE_SPEED, GetSpell());
+        }
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_hun_posthaste::HandleAfterCast);
+    }
+};
+
 // 53480 - Roar of Sacrifice
 class spell_hun_roar_of_sacrifice : public AuraScript
 {
@@ -587,6 +637,7 @@ void AddSC_hunter_spell_scripts()
     RegisterSpellScript(spell_hun_a_murder_of_crows);
     RegisterSpellScript(spell_hun_aspect_cheetah);
     RegisterSpellScript(spell_hun_exhilaration);
+    RegisterSpellScript(spell_hun_explosive_shot);
     RegisterSpellScript(spell_hun_hunting_party);
     RegisterSpellScript(spell_hun_last_stand_pet);
     RegisterSpellScript(spell_hun_masters_call);
@@ -594,6 +645,7 @@ void AddSC_hunter_spell_scripts()
     RegisterSpellScript(spell_hun_misdirection_proc);
     RegisterSpellScript(spell_hun_multi_shot);
     RegisterSpellScript(spell_hun_pet_heart_of_the_phoenix);
+    RegisterSpellScript(spell_hun_posthaste);
     RegisterSpellScript(spell_hun_roar_of_sacrifice);
     RegisterSpellScript(spell_hun_scatter_shot);
     RegisterSpellScript(spell_hun_steady_shot);

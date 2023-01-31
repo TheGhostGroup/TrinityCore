@@ -32,7 +32,7 @@ EndScriptData */
 #include "GameObject.h"
 #include "GameTime.h"
 #include "Language.h"
-#include "MapManager.h"
+#include "Map.h"
 #include "ObjectMgr.h"
 #include "PhasingHandler.h"
 #include "Player.h"
@@ -93,18 +93,18 @@ public:
         QueryResult result;
 
         uint32 creatureCount = 0;
-        result = WorldDatabase.PQuery("SELECT COUNT(guid) FROM creature WHERE id='%u'", creatureId);
+        result = WorldDatabase.PQuery("SELECT COUNT(guid) FROM creature WHERE id='{}'", creatureId);
         if (result)
             creatureCount = (*result)[0].GetUInt64();
 
         if (handler->GetSession())
         {
             Player* player = handler->GetSession()->GetPlayer();
-            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map, (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ FROM creature WHERE id = '%u' ORDER BY order_ ASC LIMIT %u",
+            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map, (POW(position_x - '{}', 2) + POW(position_y - '{}', 2) + POW(position_z - '{}', 2)) AS order_ FROM creature WHERE id = '{}' ORDER BY order_ ASC LIMIT {}",
                 player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), creatureId, count);
         }
         else
-            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map FROM creature WHERE id = '%u' LIMIT %u",
+            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map FROM creature WHERE id = '{}' LIMIT {}",
                 creatureId, count);
 
         if (result)
@@ -120,28 +120,18 @@ public:
                 bool liveFound = false;
 
                 // Get map (only support base map from console)
-                Map* thisMap;
+                Map* thisMap = nullptr;
                 if (handler->GetSession())
                     thisMap = handler->GetSession()->GetPlayer()->GetMap();
-                else
-                    thisMap = sMapMgr->FindBaseNonInstanceMap(mapId);
 
                 // If map found, try to find active version of this creature
                 if (thisMap)
                 {
-                    auto const creBounds = thisMap->GetCreatureBySpawnIdStore().equal_range(guid);
-                    if (creBounds.first != creBounds.second)
-                    {
-                        for (std::unordered_multimap<ObjectGuid::LowType, Creature*>::const_iterator itr = creBounds.first; itr != creBounds.second;)
-                        {
-                            if (handler->GetSession())
-                                handler->PSendSysMessage(LANG_CREATURE_LIST_CHAT, std::to_string(guid).c_str(), std::to_string(guid).c_str(), cInfo->Name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->IsAlive() ? "*" : " ");
-                            else
-                                handler->PSendSysMessage(LANG_CREATURE_LIST_CONSOLE, std::to_string(guid).c_str(), cInfo->Name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->IsAlive() ? "*" : " ");
-                            ++itr;
-                        }
-                        liveFound = true;
-                    }
+                    auto const creBounds = Trinity::Containers::MapEqualRange(thisMap->GetCreatureBySpawnIdStore(), guid);
+                    for (auto& [spawnId, creature] : creBounds)
+                        handler->PSendSysMessage(LANG_CREATURE_LIST_CHAT, std::to_string(guid).c_str(), std::to_string(guid).c_str(), cInfo->Name.c_str(),
+                            x, y, z, mapId, creature->GetGUID().ToString().c_str(), creature->IsAlive() ? "*" : " ");
+                    liveFound = creBounds.begin() != creBounds.end();
                 }
 
                 if (!liveFound)
@@ -373,18 +363,18 @@ public:
         QueryResult result;
 
         uint32 objectCount = 0;
-        result = WorldDatabase.PQuery("SELECT COUNT(guid) FROM gameobject WHERE id='%u'", gameObjectId);
+        result = WorldDatabase.PQuery("SELECT COUNT(guid) FROM gameobject WHERE id='{}'", gameObjectId);
         if (result)
             objectCount = (*result)[0].GetUInt64();
 
         if (handler->GetSession())
         {
             Player* player = handler->GetSession()->GetPlayer();
-            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map, id, (POW(position_x - '%f', 2) + POW(position_y - '%f', 2) + POW(position_z - '%f', 2)) AS order_ FROM gameobject WHERE id = '%u' ORDER BY order_ ASC LIMIT %u",
+            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map, id, (POW(position_x - '{}', 2) + POW(position_y - '{}', 2) + POW(position_z - '{}', 2)) AS order_ FROM gameobject WHERE id = '{}' ORDER BY order_ ASC LIMIT {}",
                 player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), gameObjectId, count);
         }
         else
-            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map, id FROM gameobject WHERE id = '%u' LIMIT %u",
+            result = WorldDatabase.PQuery("SELECT guid, position_x, position_y, position_z, map, id FROM gameobject WHERE id = '{}' LIMIT {}",
                 gameObjectId, count);
 
         if (result)
@@ -401,28 +391,18 @@ public:
                 bool liveFound = false;
 
                 // Get map (only support base map from console)
-                Map* thisMap;
+                Map* thisMap = nullptr;
                 if (handler->GetSession())
                     thisMap = handler->GetSession()->GetPlayer()->GetMap();
-                else
-                    thisMap = sMapMgr->FindBaseNonInstanceMap(mapId);
 
                 // If map found, try to find active version of this object
                 if (thisMap)
                 {
-                    auto const goBounds = thisMap->GetGameObjectBySpawnIdStore().equal_range(guid);
-                    if (goBounds.first != goBounds.second)
-                    {
-                        for (std::unordered_multimap<ObjectGuid::LowType, GameObject*>::const_iterator itr = goBounds.first; itr != goBounds.second;)
-                        {
-                            if (handler->GetSession())
-                                handler->PSendSysMessage(LANG_GO_LIST_CHAT, std::to_string(guid).c_str(), entry, std::to_string(guid).c_str(), gInfo->name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->isSpawned() ? "*" : " ");
-                            else
-                                handler->PSendSysMessage(LANG_GO_LIST_CONSOLE, std::to_string(guid).c_str(), gInfo->name.c_str(), x, y, z, mapId, itr->second->GetGUID().ToString().c_str(), itr->second->isSpawned() ? "*" : " ");
-                            ++itr;
-                        }
-                        liveFound = true;
-                    }
+                    auto const goBounds = Trinity::Containers::MapEqualRange(thisMap->GetGameObjectBySpawnIdStore(), guid);
+                    for (auto& [spawnId, go] : goBounds)
+                        handler->PSendSysMessage(LANG_GO_LIST_CHAT, std::to_string(guid).c_str(), entry, std::to_string(guid).c_str(), gInfo->name.c_str(), x, y, z, mapId,
+                            go->GetGUID().ToString().c_str(), go->isSpawned() ? "*" : " ");
+                    liveFound = goBounds.begin() != goBounds.end();
                 }
 
                 if (!liveFound)
@@ -584,7 +564,7 @@ public:
                     if (hasItem == 1)
                     {
                         QueryResult result2;
-                        result2 = CharacterDatabase.PQuery("SELECT item_guid FROM mail_items WHERE mail_id = '%u'", messageId);
+                        result2 = CharacterDatabase.PQuery("SELECT item_guid FROM mail_items WHERE mail_id = '{}'", messageId);
                         if (result2)
                         {
                             do

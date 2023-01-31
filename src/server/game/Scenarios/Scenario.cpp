@@ -16,7 +16,6 @@
  */
 
 #include "Scenario.h"
-#include "InstanceSaveMgr.h"
 #include "Log.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
@@ -34,7 +33,7 @@ Scenario::Scenario(ScenarioData const* scenarioData) : _data(scenarioData), _cur
     if (ScenarioStepEntry const* step = GetFirstStep())
         SetStep(step);
     else
-        TC_LOG_ERROR("scenario", "Scenario::Scenario: Could not launch Scenario (id: %u), found no valid scenario step", _data->Entry->ID);
+        TC_LOG_ERROR("scenario", "Scenario::Scenario: Could not launch Scenario (id: {}), found no valid scenario step", _data->Entry->ID);
 }
 
 Scenario::~Scenario()
@@ -79,7 +78,7 @@ void Scenario::CompleteStep(ScenarioStepEntry const* step)
     if (IsComplete())
         CompleteScenario();
     else
-        TC_LOG_ERROR("scenario", "Scenario::CompleteStep: Scenario (id: %u, step: %u) was completed, but could not determine new step, or validate scenario completion.", step->ScenarioID, step->ID);
+        TC_LOG_ERROR("scenario", "Scenario::CompleteStep: Scenario (id: {}, step: {}) was completed, but could not determine new step, or validate scenario completion.", step->ScenarioID, step->ID);
 }
 
 void Scenario::CompleteScenario()
@@ -175,7 +174,10 @@ bool Scenario::CanUpdateCriteriaTree(Criteria const * /*criteria*/, CriteriaTree
 
 bool Scenario::CanCompleteCriteriaTree(CriteriaTree const* tree)
 {
-    ScenarioStepEntry const* step = ASSERT_NOTNULL(tree->ScenarioStep);
+    ScenarioStepEntry const* step = tree->ScenarioStep;
+    if (!step)
+        return false;
+
     ScenarioStepState const state = GetStepState(step);
     if (state == SCENARIO_STEP_DONE)
         return false;
@@ -326,7 +328,7 @@ std::vector<WorldPackets::Achievement::CriteriaProgress> Scenario::GetCriteriasP
 
 CriteriaList const& Scenario::GetCriteriaByType(CriteriaType type, uint32 /*asset*/) const
 {
-    return sCriteriaMgr->GetScenarioCriteriaByType(type);
+    return sCriteriaMgr->GetScenarioCriteriaByTypeAndScenario(type, _data->Entry->ID);
 }
 
 void Scenario::SendBootPlayer(Player* player)

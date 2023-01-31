@@ -37,6 +37,7 @@ class DamageInfo;
 class DispelInfo;
 class DynamicObject;
 class GameObject;
+class HealInfo;
 class Item;
 class ModuleReference;
 class Player;
@@ -216,6 +217,7 @@ enum SpellScriptHookType
     SPELL_SCRIPT_HOOK_AFTER_CAST,
     SPELL_SCRIPT_HOOK_CALC_CRIT_CHANCE,
     SPELL_SCRIPT_HOOK_ON_PRECAST,
+    SPELL_SCRIPT_HOOK_CALC_CAST_TIME,
 };
 
 #define HOOK_SPELL_HIT_START SPELL_SCRIPT_HOOK_EFFECT_HIT
@@ -414,6 +416,8 @@ class TC_GAME_API SpellScript : public _SpellScript
 
         #define PrepareSpellScript(CLASSNAME) SPELLSCRIPT_FUNCTION_TYPE_DEFINES(CLASSNAME) SPELLSCRIPT_FUNCTION_CAST_DEFINES(CLASSNAME)
     public:
+        SpellScript();
+        ~SpellScript();
         bool _Validate(SpellInfo const* entry) override;
         bool _Load(Spell* spell);
         void _InitHit();
@@ -435,7 +439,7 @@ class TC_GAME_API SpellScript : public _SpellScript
         //
         // SpellScript interface
         //
-        // example: void OnPrecast override { }
+        // example: void OnPrecast() override { }
         virtual void OnPrecast() { }
         //
         // hooks to which you can attach your functions
@@ -452,6 +456,9 @@ class TC_GAME_API SpellScript : public _SpellScript
         // where function is SpellCastResult function()
         HookList<CheckCastHandler> OnCheckCast;
         #define SpellCheckCastFn(F) CheckCastHandlerFunction(&F)
+
+        // example: int32 CalcCastTime(int32 castTime) override { return 1500; }
+        virtual int32 CalcCastTime(int32 castTime) { return castTime; }
 
         // example: OnCalculateResistAbsorb += SpellOnResistAbsorbCalculateFn(class::function);
         // where function is void function(DamageInfo const& damageInfo, uint32& resistAmount, int32& absorbAmount)
@@ -614,6 +621,8 @@ class TC_GAME_API SpellScript : public _SpellScript
         SpellEffectInfo const& GetEffectInfo() const;
         int32 GetEffectValue() const;
         void SetEffectValue(int32 value);
+        float GetEffectVariance() const;
+        void SetEffectVariance(float variance);
 
         // returns: cast item if present.
         Item* GetCastItem() const;
@@ -688,6 +697,7 @@ class TC_GAME_API AuraScript : public _SpellScript
         typedef void(CLASSNAME::*AuraEffectCalcSpellModFnType)(AuraEffect const*, SpellModifier* &); \
         typedef void(CLASSNAME::*AuraEffectCalcCritChanceFnType)(AuraEffect const*, Unit const*, float&); \
         typedef void(CLASSNAME::*AuraEffectAbsorbFnType)(AuraEffect*, DamageInfo &, uint32 &); \
+        typedef void(CLASSNAME::*AuraEffectAbsorbHealFnType)(AuraEffect*, HealInfo &, uint32 &); \
         typedef void(CLASSNAME::*AuraEffectSplitFnType)(AuraEffect*, DamageInfo &, uint32 &); \
         typedef bool(CLASSNAME::*AuraCheckProcFnType)(ProcEventInfo&); \
         typedef bool(CLASSNAME::*AuraCheckEffectProcFnType)(AuraEffect const*, ProcEventInfo&); \
@@ -840,6 +850,14 @@ class TC_GAME_API AuraScript : public _SpellScript
             private:
                 AuraEffectAbsorbFnType pEffectHandlerScript;
         };
+        class TC_GAME_API EffectAbsorbHealHandler : public EffectBase
+        {
+            public:
+                EffectAbsorbHealHandler(AuraEffectAbsorbHealFnType _pEffectHandlerScript, uint8 _effIndex);
+                void Call(AuraScript* auraScript, AuraEffect* aurEff, HealInfo& healInfo, uint32& absorbAmount);
+            private:
+                AuraEffectAbsorbHealFnType pEffectHandlerScript;
+        };
         class TC_GAME_API EffectManaShieldHandler : public EffectBase
         {
             public:
@@ -943,6 +961,7 @@ class TC_GAME_API AuraScript : public _SpellScript
         class EffectCalcCritChanceHandlerFunction : public AuraScript::EffectCalcCritChanceHandler { public: explicit EffectCalcCritChanceHandlerFunction(AuraEffectCalcCritChanceFnType effectHandlerScript, uint8 effIndex, uint16 effName) : AuraScript::EffectCalcCritChanceHandler((AuraScript::AuraEffectCalcCritChanceFnType)effectHandlerScript, effIndex, effName) { } }; \
         class EffectApplyHandlerFunction : public AuraScript::EffectApplyHandler { public: explicit EffectApplyHandlerFunction(AuraEffectApplicationModeFnType _pEffectHandlerScript, uint8 _effIndex, uint16 _effName, AuraEffectHandleModes _mode) : AuraScript::EffectApplyHandler((AuraScript::AuraEffectApplicationModeFnType)_pEffectHandlerScript, _effIndex, _effName, _mode) { } }; \
         class EffectAbsorbFunction : public AuraScript::EffectAbsorbHandler { public: explicit EffectAbsorbFunction(AuraEffectAbsorbFnType _pEffectHandlerScript, uint8 _effIndex, bool overkill = false) : AuraScript::EffectAbsorbHandler((AuraScript::AuraEffectAbsorbFnType)_pEffectHandlerScript, _effIndex, overkill) { } }; \
+        class EffectAbsorbHealFunction : public AuraScript::EffectAbsorbHealHandler { public: EffectAbsorbHealFunction(AuraEffectAbsorbHealFnType _pEffectHandlerScript, uint8 _effIndex) : AuraScript::EffectAbsorbHealHandler((AuraScript::AuraEffectAbsorbHealFnType)_pEffectHandlerScript, _effIndex) { } }; \
         class EffectManaShieldFunction : public AuraScript::EffectManaShieldHandler { public: explicit EffectManaShieldFunction(AuraEffectAbsorbFnType _pEffectHandlerScript, uint8 _effIndex) : AuraScript::EffectManaShieldHandler((AuraScript::AuraEffectAbsorbFnType)_pEffectHandlerScript, _effIndex) { } }; \
         class EffectSplitFunction : public AuraScript::EffectSplitHandler { public: explicit EffectSplitFunction(AuraEffectSplitFnType _pEffectHandlerScript, uint8 _effIndex) : AuraScript::EffectSplitHandler((AuraScript::AuraEffectSplitFnType)_pEffectHandlerScript, _effIndex) { } }; \
         class CheckProcHandlerFunction : public AuraScript::CheckProcHandler { public: explicit CheckProcHandlerFunction(AuraCheckProcFnType handlerScript) : AuraScript::CheckProcHandler((AuraScript::AuraCheckProcFnType)handlerScript) { } }; \
@@ -954,8 +973,8 @@ class TC_GAME_API AuraScript : public _SpellScript
         #define PrepareAuraScript(CLASSNAME) AURASCRIPT_FUNCTION_TYPE_DEFINES(CLASSNAME) AURASCRIPT_FUNCTION_CAST_DEFINES(CLASSNAME)
 
     public:
-        AuraScript() : _SpellScript(), m_aura(nullptr), m_auraApplication(nullptr), m_defaultActionPrevented(false)
-        { }
+        AuraScript();
+        ~AuraScript();
         bool _Validate(SpellInfo const* entry) override;
         bool _Load(Aura* aura);
         void _PrepareScriptCall(AuraScriptHookType hookType, AuraApplication const* aurApp = nullptr);
@@ -1069,6 +1088,17 @@ class TC_GAME_API AuraScript : public _SpellScript
         // example: AfterEffectAbsorb += AuraEffectAbsorbFn(class::function, EffectIndexSpecifier);
         // where function is: void function (AuraEffect* aurEff, DamageInfo& dmgInfo, uint32& absorbAmount);
         HookList<EffectAbsorbHandler> AfterEffectAbsorb;
+
+        // executed when absorb aura effect is going to reduce damage
+        // example: OnEffectAbsorbHeal += AuraEffectAbsorbHealFn(class::function, EffectIndexSpecifier);
+        // where function is: void function (AuraEffect const* aurEff, HealInfo& healInfo, uint32& absorbAmount);
+        HookList<EffectAbsorbHealHandler> OnEffectAbsorbHeal;
+        #define AuraEffectAbsorbHealFn(F, I) EffectAbsorbHealFunction(&F, I)
+
+        // executed after absorb aura effect reduced heal to target - absorbAmount is real amount absorbed by aura
+        // example: AfterEffectAbsorbHeal += AuraEffectAbsorbHealFn(class::function, EffectIndexSpecifier);
+        // where function is: void function (AuraEffect* aurEff, HealInfo& healInfo, uint32& absorbAmount);
+        HookList<EffectAbsorbHealHandler> AfterEffectAbsorbHeal;
 
         // executed when mana shield aura effect is going to reduce damage
         // example: OnEffectManaShield += AuraEffectManaShieldFn(class::function, EffectIndexSpecifier);

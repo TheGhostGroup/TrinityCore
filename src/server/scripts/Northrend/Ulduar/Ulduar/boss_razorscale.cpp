@@ -329,12 +329,14 @@ struct boss_razorscale : public BossAI
 
     void HandleInitialMovement()
     {
-        Movement::PointsArray path(RazorscalePath, RazorscalePath + pathSize);
-        Movement::MoveSplineInit init(me);
-        init.MovebyPath(path, 0);
-        init.SetCyclic();
-        init.SetFly();
-        me->GetMotionMaster()->LaunchMoveSpline(std::move(init), 0, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
+        std::function<void(Movement::MoveSplineInit&)> initializer = [](Movement::MoveSplineInit& init)
+        {
+            Movement::PointsArray path(RazorscalePath, RazorscalePath + pathSize);
+            init.MovebyPath(path, 0);
+            init.SetCyclic();
+            init.SetFly();
+        };
+        me->GetMotionMaster()->LaunchMoveSpline(std::move(initializer), 0, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
     }
 
     bool CanAIAttack(Unit const* target) const override
@@ -511,7 +513,7 @@ struct boss_razorscale : public BossAI
 
     void EnterEvadeMode(EvadeReason why) override
     {
-        if (why == EVADE_REASON_BOUNDARY && !events.IsInPhase(PHASE_PERMA_GROUND))
+        if (why == EvadeReason::Boundary && !events.IsInPhase(PHASE_PERMA_GROUND))
             return;
 
         instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, me);
@@ -530,7 +532,7 @@ struct boss_razorscale : public BossAI
 
     void HandleMusic(bool active)
     {
-        uint32 enabled = active ? 1 : 0;
+        int32 enabled = active ? 1 : 0;
         instance->DoUpdateWorldState(WORLD_STATE_RAZORSCALE_MUSIC, enabled);
     }
 

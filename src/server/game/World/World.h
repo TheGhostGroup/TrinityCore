@@ -249,13 +249,16 @@ enum WorldIntConfigs
     CONFIG_CHARACTER_CREATING_DISABLED_CLASSMASK,
     CONFIG_CHARACTERS_PER_ACCOUNT,
     CONFIG_CHARACTERS_PER_REALM,
+    CONFIG_CHARACTER_CREATING_EVOKERS_PER_REALM,
     CONFIG_CHARACTER_CREATING_MIN_LEVEL_FOR_DEMON_HUNTER,
+    CONFIG_CHARACTER_CREATING_MIN_LEVEL_FOR_EVOKER,
     CONFIG_SKIP_CINEMATICS,
     CONFIG_MAX_PLAYER_LEVEL,
     CONFIG_MIN_DUALSPEC_LEVEL,
     CONFIG_START_PLAYER_LEVEL,
     CONFIG_START_DEATH_KNIGHT_PLAYER_LEVEL,
     CONFIG_START_DEMON_HUNTER_PLAYER_LEVEL,
+    CONFIG_START_EVOKER_PLAYER_LEVEL,
     CONFIG_START_ALLIED_RACE_LEVEL,
     CONFIG_START_PLAYER_MONEY,
     CONFIG_CURRENCY_START_APEXIS_CRYSTALS,
@@ -267,7 +270,8 @@ enum WorldIntConfigs
     CONFIG_CURRENCY_RESET_INTERVAL,
     CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL,
     CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL_DIFFERENCE,
-    CONFIG_INSTANCE_RESET_TIME_HOUR,
+    CONFIG_RESET_SCHEDULE_WEEK_DAY,
+    CONFIG_RESET_SCHEDULE_HOUR,
     CONFIG_INSTANCE_UNLOAD_DELAY,
     CONFIG_DAILY_QUEST_RESET_TIME_HOUR,
     CONFIG_WEEKLY_QUEST_RESET_TIME_WDAY,
@@ -301,6 +305,8 @@ enum WorldIntConfigs
     CONFIG_EXPANSION,
     CONFIG_CHATFLOOD_MESSAGE_COUNT,
     CONFIG_CHATFLOOD_MESSAGE_DELAY,
+    CONFIG_CHATFLOOD_ADDON_MESSAGE_COUNT,
+    CONFIG_CHATFLOOD_ADDON_MESSAGE_DELAY,
     CONFIG_CHATFLOOD_MUTE_TIME,
     CONFIG_CREATURE_FAMILY_ASSISTANCE_DELAY,
     CONFIG_CREATURE_FAMILY_FLEE_DELAY,
@@ -559,6 +565,8 @@ enum RealmZone
     REALM_ZONE_CN5_8         = 37                           // basic-Latin at create, any at login
 };
 
+struct PersistentWorldVariable;
+
 /// Storage class for commands issued for delayed execution
 struct TC_GAME_API CliCommandHolder
 {
@@ -744,9 +752,19 @@ class TC_GAME_API World
             return index < INT64_CONFIT_VALUE_COUNT ? m_int64_configs[index] : 0;
         }
 
-        void setWorldState(uint32 index, uint32 value);
-        uint32 getWorldState(uint32 index) const;
-        void LoadWorldStates();
+        static PersistentWorldVariable const NextCurrencyResetTimeVarId;                    // Next arena distribution time
+        static PersistentWorldVariable const NextWeeklyQuestResetTimeVarId;                 // Next weekly quest reset time
+        static PersistentWorldVariable const NextBGRandomDailyResetTimeVarId;               // Next daily BG reset time
+        static PersistentWorldVariable const CharacterDatabaseCleaningFlagsVarId;           // Cleaning Flags
+        static PersistentWorldVariable const NextGuildDailyResetTimeVarId;                  // Next guild cap reset time
+        static PersistentWorldVariable const NextMonthlyQuestResetTimeVarId;                // Next monthly quest reset time
+        static PersistentWorldVariable const NextDailyQuestResetTimeVarId;                  // Next daily quest reset time
+        static PersistentWorldVariable const NextOldCalendarEventDeletionTimeVarId;         // Next daily calendar deletions of old events time
+        static PersistentWorldVariable const NextGuildWeeklyResetTimeVarId;                 // Next guild week reset time
+
+        int32 GetPersistentWorldVariable(PersistentWorldVariable const& var) const;
+        void SetPersistentWorldVariable(PersistentWorldVariable const& var, int32 value);
+        void LoadPersistentWorldVariables();
 
         /// Are we on a "Player versus Player" server?
         bool IsPvPRealm() const;
@@ -792,7 +810,7 @@ class TC_GAME_API World
 
         uint32 GetCleaningFlags() const { return m_CleaningFlags; }
         void SetCleaningFlags(uint32 flags) { m_CleaningFlags = flags; }
-        void ResetEventSeasonalQuests(uint16 event_id);
+        void ResetEventSeasonalQuests(uint16 event_id, time_t eventStartTime);
 
         void ReloadRBAC();
 
@@ -803,8 +821,6 @@ class TC_GAME_API World
         bool IsGuidAlert() { return _guidAlert; }
 
         // War mode balancing
-        TeamId GetWarModeDominantFaction() const { return _warModeDominantFaction; }
-        int32 GetWarModeOutnumberedFactionReward() const { return _warModeOutnumberedFactionReward; }
         void SetForcedWarModeFactionBalanceState(TeamId team, int32 reward = 0);
         void DisableForcedWarModeFactionBalanceState();
 
@@ -862,8 +878,7 @@ class TC_GAME_API World
         uint64 m_int64_configs[INT64_CONFIT_VALUE_COUNT];
         bool m_bool_configs[BOOL_CONFIG_VALUE_COUNT];
         float m_float_configs[FLOAT_CONFIG_VALUE_COUNT];
-        typedef std::map<uint32, uint32> WorldStatesMap;
-        WorldStatesMap m_worldstates;
+        std::unordered_map<std::string, int32> m_worldVariables;
         uint32 m_playerLimit;
         AccountTypes m_allowedSecurityLevel;
         LocaleConstant m_defaultDbcLocale;                     // from config for one from loaded DBC locales
@@ -935,9 +950,6 @@ class TC_GAME_API World
 
         // War mode balancing
         void UpdateWarModeRewardValues();
-
-        TeamId _warModeDominantFaction; // the team that has higher percentage
-        int32 _warModeOutnumberedFactionReward;
 
     friend class debug_commandscript;
 };

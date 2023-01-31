@@ -346,10 +346,12 @@ struct npc_grauf : public ScriptedAI
             return;
         }
 
-        Movement::MoveSplineInit init(who);
-        init.DisableTransportPathTransformations();
-        init.MoveTo(0.3320355f, 0.05355075f, 5.196949f, false);
-        who->GetMotionMaster()->LaunchMoveSpline(std::move(init), EVENT_VEHICLE_BOARD, MOTION_PRIORITY_HIGHEST);
+        std::function<void(Movement::MoveSplineInit&)> initializer = [](Movement::MoveSplineInit& init)
+        {
+            init.DisableTransportPathTransformations();
+            init.MoveTo(0.3320355f, 0.05355075f, 5.196949f, false);
+        };
+        who->GetMotionMaster()->LaunchMoveSpline(std::move(initializer), EVENT_VEHICLE_BOARD, MOTION_PRIORITY_HIGHEST);
 
         me->setActive(true);
         me->SetFarVisible(true);
@@ -671,7 +673,7 @@ class spell_skadi_reset_check : public SpellScript
 
         if (InstanceScript* instance = target->GetInstanceScript())
             if (instance->GetBossState(DATA_SKADI_THE_RUTHLESS) == IN_PROGRESS)
-                target->AI()->EnterEvadeMode(CreatureAI::EVADE_REASON_NO_HOSTILES);
+                target->AI()->EnterEvadeMode(EvadeReason::NoHostiles);
     }
 
     void Register() override

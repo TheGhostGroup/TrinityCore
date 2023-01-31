@@ -18,6 +18,7 @@
 #include "ScriptMgr.h"
 #include "AreaBoundary.h"
 #include "CellImpl.h"
+#include "Containers.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceScript.h"
 #include "MotionMaster.h"
@@ -632,16 +633,18 @@ class boss_thorim : public CreatureScript
                         summon->SetReactState(REACT_PASSIVE);
                         summon->CastSpell(summon, SPELL_LIGHTNING_DESTRUCTION, true);
 
-                        Movement::PointsArray path;
-                        path.reserve(LightningOrbPathSize);
-                        std::transform(std::begin(LightningOrbPath), std::end(LightningOrbPath), std::back_inserter(path), [](Position const& pos)
+                        std::function<void(Movement::MoveSplineInit&)> initializer = [](Movement::MoveSplineInit& init)
                         {
-                            return G3D::Vector3(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ());
-                        });
+                            Movement::PointsArray path;
+                            path.reserve(LightningOrbPathSize);
+                            std::transform(std::begin(LightningOrbPath), std::end(LightningOrbPath), std::back_inserter(path), [](Position const& pos)
+                            {
+                                return G3D::Vector3(pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ());
+                            });
 
-                        Movement::MoveSplineInit init(summon);
-                        init.MovebyPath(path);
-                        summon->GetMotionMaster()->LaunchMoveSpline(std::move(init), 0, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
+                            init.MovebyPath(path);
+                        };
+                        summon->GetMotionMaster()->LaunchMoveSpline(std::move(initializer), 0, MOTION_PRIORITY_NORMAL, POINT_MOTION_TYPE);
                         break;
                     }
                     case NPC_DARK_RUNE_CHAMPION:
@@ -1262,7 +1265,7 @@ class npc_thorim_arena_phase : public CreatureScript
 
             void EnterEvadeMode(EvadeReason why) override
             {
-                if (why != EVADE_REASON_NO_HOSTILES && why != EVADE_REASON_BOUNDARY)
+                if (why != EvadeReason::NoHostiles && why != EvadeReason::Boundary)
                     return;
 
                 // this should only happen if theres no alive player in the arena -> summon orb
@@ -2114,7 +2117,7 @@ class condition_thorim_arena_leap : public ConditionScript
 
         bool OnConditionCheck(Condition const* condition, ConditionSourceInfo& sourceInfo) override
         {
-            WorldObject* target = sourceInfo.mConditionTargets[condition->ConditionTarget];
+            WorldObject const* target = sourceInfo.mConditionTargets[condition->ConditionTarget];
             InstanceScript* instance = target->GetInstanceScript();
 
             if (!instance)

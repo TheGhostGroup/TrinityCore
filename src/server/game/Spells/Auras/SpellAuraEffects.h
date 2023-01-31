@@ -195,6 +195,8 @@ class TC_GAME_API AuraEffect
         void HandleAuraModStun(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleAuraModRoot(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandlePreventFleeing(AuraApplication const* aurApp, uint8 mode, bool apply) const;
+        void HandleAuraModRootAndDisableGravity(AuraApplication const* aurApp, uint8 mode, bool apply) const;
+        void HandleAuraModStunAndDisableGravity(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         //  charm
         void HandleModPossess(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleModPossessPet(AuraApplication const* aurApp, uint8 mode, bool apply) const;
@@ -234,7 +236,8 @@ class TC_GAME_API AuraEffect
         void HandleModHealingDonePct(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleModTotalPercentStat(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleAuraModExpertise(AuraApplication const* aurApp, uint8 mode, bool apply) const;
-        void HandleModStatBonusArmor(AuraApplication const* aurApp, uint8 mode, bool apply) const;
+        void HandleModBonusArmor(AuraApplication const* aurApp, uint8 mode, bool apply) const;
+        void HandleModBonusArmorPercent(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleModArmorPctFromStat(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleModStatBonusPercent(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleOverrideSpellPowerByAttackPower(AuraApplication const* aurApp, uint8 mode, bool apply) const;
@@ -300,6 +303,7 @@ class TC_GAME_API AuraEffect
         void HandleAuraModFaction(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleLearnSpell(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleComprehendLanguage(AuraApplication const* aurApp, uint8 mode, bool apply) const;
+        void HandleModAlternativeDefaultLanguage(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleAuraLinked(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleAuraOpenStable(AuraApplication const* aurApp, uint8 mode, bool apply) const;
         void HandleAuraModFakeInebriation(AuraApplication const* aurApp, uint8 mode, bool apply) const;

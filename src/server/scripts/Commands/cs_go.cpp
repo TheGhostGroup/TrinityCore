@@ -34,6 +34,7 @@ EndScriptData */
 #include "Player.h"
 #include "RBAC.h"
 #include "SupportMgr.h"
+#include "TerrainMgr.h"
 #include "Transport.h"
 #include "Util.h"
 #include "WorldSession.h"
@@ -139,7 +140,7 @@ public:
         return DoTeleport(handler, spawnpoint->spawnPoint, spawnpoint->mapId);
     }
 
-    static bool HandleGoGameObjectSpawnIdCommand(ChatHandler* handler, uint32 spawnId)
+    static bool HandleGoGameObjectSpawnIdCommand(ChatHandler* handler, Variant<Hyperlink<gameobject>, ObjectGuid::LowType> spawnId)
     {
         GameObjectData const* spawnpoint = sObjectMgr->GetGameObjectData(spawnId);
         if (!spawnpoint)
@@ -152,12 +153,12 @@ public:
         return DoTeleport(handler, spawnpoint->spawnPoint, spawnpoint->mapId);
     }
 
-    static bool HandleGoGameObjectGOIdCommand(ChatHandler* handler, uint32 goId)
+    static bool HandleGoGameObjectGOIdCommand(ChatHandler* handler, Variant<Hyperlink<gameobject_entry>, uint32> goId)
     {
         GameObjectData const* spawnpoint = nullptr;
         for (auto const& pair : sObjectMgr->GetAllGameObjectData())
         {
-            if (pair.second.id != goId)
+            if (pair.second.id != *goId)
                 continue;
 
             if (!spawnpoint)
@@ -230,8 +231,8 @@ public:
         else
             player->SaveRecallPosition(); // save only in non-flight case
 
-        Map* map = sMapMgr->CreateBaseMap(mapId);
-        float z = std::max(map->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), x, y, MAX_HEIGHT), map->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), x, y));
+        std::shared_ptr<TerrainInfo> terrain = sTerrainMgr.LoadTerrain(mapId);
+        float z = std::max(terrain->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, MAX_HEIGHT), terrain->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y));
 
         player->TeleportTo(mapId, x, y, z, player->GetOrientation());
         return true;
@@ -289,8 +290,8 @@ public:
         else
             player->SaveRecallPosition(); // save only in non-flight case
 
-        Map* map = sMapMgr->CreateBaseMap(mapId);
-        z = std::max(map->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), x, y, MAX_HEIGHT), map->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), x, y));
+        std::shared_ptr<TerrainInfo> terrain = sTerrainMgr.LoadTerrain(mapId);
+        z = std::max(terrain->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, MAX_HEIGHT), terrain->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y));
 
         player->TeleportTo(mapId, x, y, z, 0.0f);
         return true;
@@ -340,19 +341,16 @@ public:
         AreaTableEntry const* zoneEntry = areaEntry->ParentAreaID ? sAreaTableStore.LookupEntry(areaEntry->ParentAreaID) : areaEntry;
         ASSERT(zoneEntry);
 
-        Map* map = sMapMgr->CreateBaseMap(zoneEntry->ContinentID);
-
-        if (map->Instanceable())
-        {
-            handler->PSendSysMessage(LANG_INVALID_ZONE_MAP, areaId, areaEntry->AreaName[handler->GetSessionDbcLocale()], map->GetId(), map->GetMapName());
-            handler->SetSentErrorMessage(true);
-            return false;
-        }
-
         x /= 100.0f;
         y /= 100.0f;
 
-        sDB2Manager.Zone2MapCoordinates(areaEntry->ParentAreaID ? uint32(areaEntry->ParentAreaID) : areaId, x, y);
+        std::shared_ptr<TerrainInfo> terrain = sTerrainMgr.LoadTerrain(zoneEntry->ContinentID);
+        if (!sDB2Manager.Zone2MapCoordinates(areaEntry->ParentAreaID ? uint32(areaEntry->ParentAreaID) : areaId, x, y))
+        {
+            handler->PSendSysMessage(LANG_INVALID_ZONE_MAP, areaId, areaEntry->AreaName[handler->GetSessionDbcLocale()], terrain->GetId(), terrain->GetMapName());
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
 
         if (!MapManager::IsValidMapCoord(zoneEntry->ContinentID, x, y))
         {
@@ -367,7 +365,7 @@ public:
         else
             player->SaveRecallPosition(); // save only in non-flight case
 
-        float z = std::max(map->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), x, y, MAX_HEIGHT), map->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), x, y));
+        float z = std::max(terrain->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), zoneEntry->ContinentID, x, y, MAX_HEIGHT), terrain->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), zoneEntry->ContinentID, x, y));
 
         player->TeleportTo(zoneEntry->ContinentID, x, y, z, player->GetOrientation());
         return true;
@@ -395,8 +393,8 @@ public:
                 handler->SetSentErrorMessage(true);
                 return false;
             }
-            Map* map = sMapMgr->CreateBaseMap(mapId);
-            z = std::max(map->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), x, y, MAX_HEIGHT), map->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), x, y));
+            std::shared_ptr<TerrainInfo> terrain = sTerrainMgr.LoadTerrain(mapId);
+            z = std::max(terrain->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, MAX_HEIGHT), terrain->GetWaterLevel(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y));
         }
 
         return DoTeleport(handler, { x, y, *z, o.value_or(0.0f) }, mapId);

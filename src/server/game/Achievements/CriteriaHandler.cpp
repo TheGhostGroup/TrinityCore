@@ -34,6 +34,7 @@
 #include "Item.h"
 #include "LanguageMgr.h"
 #include "Log.h"
+#include "Map.h"
 #include "MapManager.h"
 #include "ObjectMgr.h"
 #include "PhasingHandler.h"
@@ -48,12 +49,13 @@
 #include "SpellMgr.h"
 #include "World.h"
 #include "WorldSession.h"
+#include "WorldStateMgr.h"
 
 bool CriteriaData::IsValid(Criteria const* criteria)
 {
     if (DataType >= MAX_CRITERIA_DATA_TYPE)
     {
-        TC_LOG_ERROR("sql.sql", "Table `criteria_data` for criteria (Entry: %u) contains a wrong data type (%u), ignored.", criteria->ID, DataType);
+        TC_LOG_ERROR("sql.sql", "Table `criteria_data` for criteria (Entry: {}) contains a wrong data type ({}), ignored.", criteria->ID, DataType);
         return false;
     }
     switch (CriteriaType(criteria->Entry->Type))
@@ -88,7 +90,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         default:
             if (DataType != CRITERIA_DATA_TYPE_SCRIPT)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` contains data for a non-supported criteria type (Entry: %u Type: %u), ignored.", criteria->ID, criteria->Entry->Type);
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` contains data for a non-supported criteria type (Entry: {} Type: {}), ignored.", criteria->ID, criteria->Entry->Type);
                 return false;
             }
             break;
@@ -102,7 +104,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_T_CREATURE:
             if (!Creature.Id || !sObjectMgr->GetCreatureTemplate(Creature.Id))
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_CREATURE (%u) contains a non-existing creature id in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_CREATURE ({}) contains a non-existing creature id in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Creature.Id);
                 return false;
             }
@@ -110,19 +112,19 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE:
             if (!ClassRace.Class && !ClassRace.Race)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE (%u) must not have 0 in either value field, ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE ({}) must not have 0 in either value field, ignored.",
                     criteria->ID, criteria->Entry->Type, DataType);
                 return false;
             }
             if (ClassRace.Class && ((1 << (ClassRace.Class-1)) & CLASSMASK_ALL_PLAYABLE) == 0)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE (%u) contains a non-existing class in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE ({}) contains a non-existing class in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Class);
                 return false;
             }
             if (!Trinity::RaceMask<uint64>{ RACEMASK_ALL_PLAYABLE }.HasRace(ClassRace.Race))
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE (%u) contains a non-existing race in value2 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE ({}) contains a non-existing race in value2 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Race);
                 return false;
             }
@@ -130,7 +132,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_T_PLAYER_LESS_HEALTH:
             if (Health.Percent < 1 || Health.Percent > 100)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_PLAYER_LESS_HEALTH (%u) contains a wrong percent value in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_PLAYER_LESS_HEALTH ({}) contains a wrong percent value in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Health.Percent);
                 return false;
             }
@@ -141,19 +143,19 @@ bool CriteriaData::IsValid(Criteria const* criteria)
             SpellInfo const* spellEntry = sSpellMgr->GetSpellInfo(Aura.SpellId, DIFFICULTY_NONE);
             if (!spellEntry)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type %s (%u) contains a wrong spell id in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type {} ({}) contains a wrong spell id in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, (DataType == CRITERIA_DATA_TYPE_S_AURA ? "CRITERIA_DATA_TYPE_S_AURA" : "CRITERIA_DATA_TYPE_T_AURA"), DataType, Aura.SpellId);
                 return false;
             }
             if (spellEntry->GetEffects().size() <= Aura.EffectIndex)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type %s (%u) contains a wrong spell effect index in value2 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type {} ({}) contains a wrong spell effect index in value2 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, (DataType == CRITERIA_DATA_TYPE_S_AURA ? "CRITERIA_DATA_TYPE_S_AURA" : "CRITERIA_DATA_TYPE_T_AURA"), DataType, Aura.EffectIndex);
                 return false;
             }
             if (!spellEntry->GetEffect(SpellEffIndex(Aura.EffectIndex)).ApplyAuraName)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type %s (%u) contains a non-aura spell effect (ID: %u Effect: %u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type {} ({}) contains a non-aura spell effect (ID: {} Effect: {}), ignored.",
                     criteria->ID, criteria->Entry->Type, (DataType == CRITERIA_DATA_TYPE_S_AURA ? "CRITERIA_DATA_TYPE_S_AURA" : "CRITERIA_DATA_TYPE_T_AURA"), DataType, Aura.SpellId, Aura.EffectIndex);
                 return false;
             }
@@ -162,7 +164,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_VALUE:
             if (Value.ComparisonType >= COMP_TYPE_MAX)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_VALUE (%u) contains a wrong ComparisionType in value2 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_VALUE ({}) contains a wrong ComparisionType in value2 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Value.ComparisonType);
                 return false;
             }
@@ -170,7 +172,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_T_LEVEL:
             if (Level.Min > STRONG_MAX_LEVEL)
             {
-                TC_LOG_ERROR("sql.sql", "Table `CRITERIA_DATA` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_LEVEL (%u) contains a wrong minlevel in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `CRITERIA_DATA` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_T_LEVEL ({}) contains a wrong minlevel in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Level.Min);
                 return false;
             }
@@ -178,7 +180,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_T_GENDER:
             if (Gender.Gender > GENDER_NONE)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_GENDER (%u) contains a wrong gender value in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_T_GENDER ({}) contains a wrong gender value in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Gender.Gender);
                 return false;
             }
@@ -186,7 +188,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_SCRIPT:
             if (!ScriptId)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_SCRIPT (%u) does not have a ScriptName set, ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_SCRIPT ({}) does not have a ScriptName set, ignored.",
                     criteria->ID, criteria->Entry->Type, DataType);
                 return false;
             }
@@ -194,7 +196,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_MAP_PLAYER_COUNT:
             if (MapPlayers.MaxCount <= 0)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_MAP_PLAYER_COUNT (%u) contains a wrong max players count in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_MAP_PLAYER_COUNT ({}) contains a wrong max players count in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, MapPlayers.MaxCount);
                 return false;
             }
@@ -202,7 +204,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_T_TEAM:
             if (Team.Team != ALLIANCE && Team.Team != HORDE)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_TEAM (%u) contains an unknown team value in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_T_TEAM ({}) contains an unknown team value in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Team.Team);
                 return false;
             }
@@ -210,7 +212,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_S_DRUNK:
             if (Drunk.State >= MAX_DRUNKEN)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_DRUNK (%u) contains an unknown drunken state value in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_DRUNK ({}) contains an unknown drunken state value in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Drunk.State);
                 return false;
             }
@@ -218,7 +220,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_HOLIDAY:
             if (!sHolidaysStore.LookupEntry(Holiday.Id))
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_HOLIDAY (%u) contains an unknown holiday entry in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_HOLIDAY ({}) contains an unknown holiday entry in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Holiday.Id);
                 return false;
             }
@@ -228,7 +230,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
             GameEventMgr::GameEventDataMap const& events = sGameEventMgr->GetEventMap();
             if (GameEvent.Id < 1 || GameEvent.Id >= events.size())
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_GAME_EVENT (%u) has unknown game_event in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_GAME_EVENT ({}) has unknown game_event in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, GameEvent.Id);
                 return false;
             }
@@ -239,7 +241,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_S_EQUIPPED_ITEM:
             if (EquippedItem.Quality >= MAX_ITEM_QUALITY)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_EQUIPPED_ITEM (%u) contains an unknown quality state value in value2 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_EQUIPPED_ITEM ({}) contains an unknown quality state value in value2 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, EquippedItem.Quality);
                 return false;
             }
@@ -247,26 +249,26 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_MAP_ID:
             if (!sMapStore.LookupEntry(Map.Id))
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_MAP_ID (%u) contains an unknown map entry in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_MAP_ID ({}) contains an unknown map entry in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, Map.Id);
             }
             return true;
         case CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE:
             if (!ClassRace.Class && !ClassRace.Race)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE (%u) should not have 0 in either value field. Ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE ({}) should not have 0 in either value field. Ignored.",
                     criteria->ID, criteria->Entry->Type, DataType);
                 return false;
             }
             if (ClassRace.Class && ((1 << (ClassRace.Class-1)) & CLASSMASK_ALL_PLAYABLE) == 0)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE (%u) contains a non-existing class entry in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE ({}) contains a non-existing class entry in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Class);
                 return false;
             }
             if (ClassRace.Race && !RACEMASK_ALL_PLAYABLE.HasRace(ClassRace.Race))
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE (%u) contains a non-existing race entry in value2 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE ({}) contains a non-existing race entry in value2 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Race);
                 return false;
             }
@@ -274,7 +276,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_S_KNOWN_TITLE:
             if (!sCharTitlesStore.LookupEntry(KnownTitle.Id))
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_KNOWN_TITLE (%u) contains an unknown title_id in value1 (%u), ignore.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_KNOWN_TITLE ({}) contains an unknown title_id in value1 ({}), ignore.",
                     criteria->ID, criteria->Entry->Type, DataType, KnownTitle.Id);
                 return false;
             }
@@ -282,13 +284,13 @@ bool CriteriaData::IsValid(Criteria const* criteria)
         case CRITERIA_DATA_TYPE_S_ITEM_QUALITY:
             if (ItemQuality.Quality >= MAX_ITEM_QUALITY)
             {
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_ITEM_QUALITY (%u) contains an unknown quality state value in value1 (%u), ignored.",
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) for data type CRITERIA_DATA_TYPE_S_ITEM_QUALITY ({}) contains an unknown quality state value in value1 ({}), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ItemQuality.Quality);
                 return false;
             }
             return true;
         default:
-            TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) contains data of a non-supported data type (%u), ignored.", criteria->ID, criteria->Entry->Type, DataType);
+            TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: {} Type: {}) contains data of a non-supported data type ({}), ignored.", criteria->ID, criteria->Entry->Type, DataType);
             return false;
     }
 }
@@ -384,14 +386,14 @@ bool CriteriaData::Meets(uint32 criteriaId, Player const* source, WorldObject co
             class Map* map = source->GetMap();
             if (!map->IsDungeon())
             {
-                TC_LOG_ERROR("criteria", "Criteria system call CRITERIA_DATA_TYPE_INSTANCE_SCRIPT (%u) for criteria %u in a non-dungeon/non-raid map %u",
+                TC_LOG_ERROR("criteria", "Criteria system call CRITERIA_DATA_TYPE_INSTANCE_SCRIPT ({}) for criteria {} in a non-dungeon/non-raid map {}",
                     DataType, criteriaId, map->GetId());
                 return false;
             }
             InstanceScript* instance = map->ToInstanceMap()->GetInstanceScript();
             if (!instance)
             {
-                TC_LOG_ERROR("criteria", "Criteria system call CRITERIA_DATA_TYPE_INSTANCE_SCRIPT (%u) for criteria %u in map %u, but the map does not have an instance script.",
+                TC_LOG_ERROR("criteria", "Criteria system call CRITERIA_DATA_TYPE_INSTANCE_SCRIPT ({}) for criteria {} in map {}, but the map does not have an instance script.",
                     DataType, criteriaId, map->GetId());
                 return false;
             }
@@ -461,7 +463,7 @@ void CriteriaHandler::UpdateCriteria(CriteriaType type, uint64 miscValue1 /*= 0*
 {
     if (type >= CriteriaType::Count)
     {
-        TC_LOG_DEBUG("criteria", "CriteriaHandler::UpdateCriteria: Wrong criteria type %u", uint32(type));
+        TC_LOG_DEBUG("criteria", "CriteriaHandler::UpdateCriteria: Wrong criteria type {}", uint32(type));
         return;
     }
 
@@ -474,14 +476,14 @@ void CriteriaHandler::UpdateCriteria(CriteriaType type, uint64 miscValue1 /*= 0*
     // Disable for GameMasters with GM-mode enabled or for players that don't have the related RBAC permission
     if (referencePlayer->IsGameMaster() || referencePlayer->GetSession()->HasPermission(rbac::RBAC_PERM_CANNOT_EARN_ACHIEVEMENTS))
     {
-        TC_LOG_DEBUG("criteria", "CriteriaHandler::UpdateCriteria: [Player %s %s] %s, %s (%u), " UI64FMTD ", " UI64FMTD ", " UI64FMTD,
-            referencePlayer->GetName().c_str(), referencePlayer->IsGameMaster() ? "GM mode on" : "disallowed by RBAC",
-            GetOwnerInfo().c_str(), CriteriaMgr::GetCriteriaTypeString(type), uint32(type), miscValue1, miscValue2, miscValue3);
+        TC_LOG_DEBUG("criteria", "CriteriaHandler::UpdateCriteria: [Player {} {}] {}, {} ({}), {}, {}, " UI64FMTD,
+            referencePlayer->GetName(), referencePlayer->IsGameMaster() ? "GM mode on" : "disallowed by RBAC",
+            GetOwnerInfo(), CriteriaMgr::GetCriteriaTypeString(type), uint32(type), miscValue1, miscValue2, miscValue3);
         return;
     }
 
-    TC_LOG_DEBUG("criteria", "CriteriaHandler::UpdateCriteria(%s, %u, " UI64FMTD ", " UI64FMTD ", " UI64FMTD ") %s",
-        CriteriaMgr::GetCriteriaTypeString(type), uint32(type), miscValue1, miscValue2, miscValue3, GetOwnerInfo().c_str());
+    TC_LOG_DEBUG("criteria", "CriteriaHandler::UpdateCriteria({}, {}, {}, {}, {}) {}",
+        CriteriaMgr::GetCriteriaTypeString(type), uint32(type), miscValue1, miscValue2, miscValue3, GetOwnerInfo());
 
     CriteriaList const& criteriaList = GetCriteriaByType(type, uint32(miscValue1));
     for (Criteria const* criteria : criteriaList)
@@ -963,7 +965,7 @@ void CriteriaHandler::SetCriteriaProgress(Criteria const* criteria, uint64 chang
             return;
     }
 
-    TC_LOG_DEBUG("criteria", "CriteriaHandler::SetCriteriaProgress(%u, " UI64FMTD ") for %s", criteria->ID, changeValue, GetOwnerInfo().c_str());
+    TC_LOG_DEBUG("criteria", "CriteriaHandler::SetCriteriaProgress({}, {}) for {}", criteria->ID, changeValue, GetOwnerInfo());
 
     CriteriaProgress* progress = GetCriteriaProgress(criteria);
     if (!progress)
@@ -1130,7 +1132,7 @@ bool CriteriaHandler::CanUpdateCriteriaTree(Criteria const* criteria, CriteriaTr
     if ((tree->Entry->GetFlags().HasFlag(CriteriaTreeFlags::HordeOnly) && referencePlayer->GetTeam() != HORDE) ||
         (tree->Entry->GetFlags().HasFlag(CriteriaTreeFlags::AllianceOnly) && referencePlayer->GetTeam() != ALLIANCE))
     {
-        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteriaTree: (Id: %u Type %s CriteriaTree %u) Wrong faction",
+        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteriaTree: (Id: {} Type {} CriteriaTree {}) Wrong faction",
             criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type), tree->Entry->ID);
         return false;
     }
@@ -1277,7 +1279,7 @@ bool CriteriaHandler::CanUpdateCriteria(Criteria const* criteria, CriteriaTreeLi
 {
     if (DisableMgr::IsDisabledFor(DISABLE_TYPE_CRITERIA, criteria->ID, nullptr))
     {
-        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: %u Type %s) Disabled", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
+        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: {} Type {}) Disabled", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
         return false;
     }
 
@@ -1296,21 +1298,25 @@ bool CriteriaHandler::CanUpdateCriteria(Criteria const* criteria, CriteriaTreeLi
 
     if (!RequirementsSatisfied(criteria, miscValue1, miscValue2, miscValue3, ref, referencePlayer))
     {
-        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: %u Type %s) Requirements not satisfied", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
+        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: {} Type {}) Requirements not satisfied", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
         return false;
     }
 
     if (criteria->Modifier && !ModifierTreeSatisfied(criteria->Modifier, miscValue1, miscValue2, ref, referencePlayer))
     {
-        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: %u Type %s) Requirements have not been satisfied", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
+        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: {} Type {}) Requirements have not been satisfied", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
         return false;
     }
 
     if (!ConditionsSatisfied(criteria, referencePlayer))
     {
-        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: %u Type %s) Conditions have not been satisfied", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
+        TC_LOG_TRACE("criteria", "CriteriaHandler::CanUpdateCriteria: (Id: {} Type {}) Conditions have not been satisfied", criteria->ID, CriteriaMgr::GetCriteriaTypeString(criteria->Entry->Type));
         return false;
     }
+
+    if (criteria->Entry->EligibilityWorldStateID != 0)
+        if (sWorldStateMgr->GetValue(criteria->Entry->EligibilityWorldStateID, referencePlayer->GetMap()) != criteria->Entry->EligibilityWorldStateValue)
+            return false;
 
     return true;
 }
@@ -1521,11 +1527,11 @@ bool CriteriaHandler::RequirementsSatisfied(Criteria const* criteria, uint64 mis
                 if (area->AreaBit < 0)
                     continue;
 
-                uint16 playerIndexOffset = uint16(uint32(area->AreaBit) / 64);
+                size_t playerIndexOffset = size_t(area->AreaBit) / PLAYER_EXPLORED_ZONES_BITS;
                 if (playerIndexOffset >= PLAYER_EXPLORED_ZONES_SIZE)
                     continue;
 
-                uint64 mask = uint64(1) << (area->AreaBit % 64);
+                uint64 mask = uint64(1) << (area->AreaBit % PLAYER_EXPLORED_ZONES_BITS);
                 if (referencePlayer->m_activePlayerData->ExploredZones[playerIndexOffset] & mask)
                 {
                     matchFound = true;
@@ -2221,7 +2227,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
                 return false;
             break;
         case ModifierTreeType::PlayersRealmWorldState: // 108
-            if (sWorld->getWorldState(reqValue) != secondaryAsset)
+            if (sWorldStateMgr->GetValue(reqValue, referencePlayer->GetMap()) != int32(secondaryAsset))
                 return false;
             break;
         case ModifierTreeType::TimeBetween: // 109
@@ -2266,10 +2272,10 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
                 return false;
             if (areaTable->AreaBit <= 0)
                 break; // success
-            uint32 playerIndexOffset = uint32(areaTable->AreaBit) / 64;
+            size_t playerIndexOffset = size_t(areaTable->AreaBit) / PLAYER_EXPLORED_ZONES_BITS;
             if (playerIndexOffset >= PLAYER_EXPLORED_ZONES_SIZE)
                 break;
-            if (!(referencePlayer->m_activePlayerData->ExploredZones[playerIndexOffset] & (UI64LIT(1) << (areaTable->AreaBit % 64))))
+            if (!(referencePlayer->m_activePlayerData->ExploredZones[playerIndexOffset] & (UI64LIT(1) << (areaTable->AreaBit % PLAYER_EXPLORED_ZONES_BITS))))
                 return false;
             break;
         }
@@ -2324,7 +2330,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
             break;
         }
         case ModifierTreeType::PlayerHasTrackedCurrencyEqualOrGreaterThan: // 121
-            if (referencePlayer->GetTrackedCurrencyCount(reqValue) < secondaryAsset)
+            if (referencePlayer->GetCurrencyTrackedQuantity(reqValue) < secondaryAsset)
                 return false;
             break;
         case ModifierTreeType::PlayerMapInstanceType: // 122
@@ -3017,7 +3023,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
             return false;
         }
         case ModifierTreeType::PlayerHasCurrencyEqual: // 209
-            if (referencePlayer->GetCurrency(reqValue) != secondaryAsset)
+            if (referencePlayer->GetCurrencyQuantity(reqValue) != secondaryAsset)
                 return false;
             break;
         case ModifierTreeType::MinimumAverageItemHighWaterMarkForSpec: // 210 NYI
@@ -3089,7 +3095,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
 
             bool bagScanReachedEnd = referencePlayer->ForEachItem(ItemSearchLocation::Everywhere, [&bonusListIDs](Item const* item)
             {
-                bool hasBonus = std::any_of(item->m_itemData->BonusListIDs->begin(), item->m_itemData->BonusListIDs->end(), [&bonusListIDs](int32 bonusListID)
+                bool hasBonus = std::any_of(item->GetBonusListIDs().begin(), item->GetBonusListIDs().end(), [&bonusListIDs](int32 bonusListID)
                 {
                     return bonusListIDs.find(bonusListID) != bonusListIDs.end();
                 });
@@ -3198,10 +3204,10 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
             PvpTierEntry const* pvpTier = sPvpTierStore.LookupEntry(reqValue);
             if (!pvpTier)
                 return false;
-            if (std::size_t(pvpTier->BracketID) >= referencePlayer->m_activePlayerData->PvpInfo.size())
+            UF::PVPInfo const* pvpInfo = referencePlayer->GetPvpInfoForBracket(pvpTier->BracketID);
+            if (!pvpInfo)
                 return false;
-            UF::PVPInfo const& pvpInfo = referencePlayer->m_activePlayerData->PvpInfo[pvpTier->BracketID];
-            if (pvpTier->ID != pvpInfo.PvpTierID || *pvpInfo.Disqualified)
+            if (pvpTier->ID != pvpInfo->PvpTierID)
                 return false;
             break;
         }
@@ -3215,7 +3221,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
         case ModifierTreeType::PlayerIsOnQuestInQuestline: // 236
         {
             bool isOnQuest = false;
-            if (std::unordered_set<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue))
+            if (std::vector<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue))
             {
                 isOnQuest = std::any_of(questLineQuests->begin(), questLineQuests->end(), [referencePlayer](QuestLineXQuestEntry const* questLineQuest)
                 {
@@ -3237,10 +3243,10 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
         }
         case ModifierTreeType::PlayerPvpTierInBracketEqualOrGreaterThan: // 239
         {
-            if (secondaryAsset >= referencePlayer->m_activePlayerData->PvpInfo.size())
+            UF::PVPInfo const* pvpInfo = referencePlayer->GetPvpInfoForBracket(secondaryAsset);
+            if (!pvpInfo)
                 return false;
-            UF::PVPInfo const& pvpInfo = referencePlayer->m_activePlayerData->PvpInfo[secondaryAsset];
-            PvpTierEntry const* pvpTier = sPvpTierStore.LookupEntry(pvpInfo.PvpTierID);
+            PvpTierEntry const* pvpTier = sPvpTierStore.LookupEntry(pvpInfo->PvpTierID);
             if (!pvpTier)
                 return false;
             if (pvpTier->Rank < int32(reqValue))
@@ -3249,7 +3255,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
         }
         case ModifierTreeType::PlayerCanAcceptQuestInQuestline: // 240
         {
-            std::unordered_set<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
+            std::vector<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
             if (!questLineQuests)
                 return false;
             bool canTakeQuest = std::any_of(questLineQuests->begin(), questLineQuests->end(), [referencePlayer](QuestLineXQuestEntry const* questLineQuest)
@@ -3264,7 +3270,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
         }
         case ModifierTreeType::PlayerHasCompletedQuestline: // 241
         {
-            std::unordered_set<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
+            std::vector<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
             if (!questLineQuests)
                 return false;
             for (QuestLineXQuestEntry const* questLineQuest : *questLineQuests)
@@ -3274,7 +3280,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
         }
         case ModifierTreeType::PlayerHasCompletedQuestlineQuestCount: // 242
         {
-            std::unordered_set<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
+            std::vector<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
             if (!questLineQuests)
                 return false;
             uint32 completedQuests = 0;
@@ -3287,7 +3293,7 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
         }
         case ModifierTreeType::PlayerHasCompletedPercentageOfQuestline: // 243
         {
-            std::unordered_set<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
+            std::vector<QuestLineXQuestEntry const*> const* questLineQuests = sDB2Manager.GetQuestsForQuestLine(reqValue);
             if (!questLineQuests || questLineQuests->empty())
                 return false;
             std::size_t completedQuests = 0;
@@ -3719,19 +3725,19 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
             PvpTierEntry const* pvpTier = sPvpTierStore.LookupEntry(reqValue);
             if (!pvpTier)
                 return false;
-            if (std::size_t(pvpTier->BracketID) >= referencePlayer->m_activePlayerData->PvpInfo.size())
+            UF::PVPInfo const* pvpInfo = referencePlayer->GetPvpInfoForBracket(pvpTier->BracketID);
+            if (!pvpInfo)
                 return false;
-            UF::PVPInfo const& pvpInfo = referencePlayer->m_activePlayerData->PvpInfo[pvpTier->BracketID];
-            if (pvpTier->ID != pvpInfo.WeeklyBestWinPvpTierID || *pvpInfo.Disqualified)
+            if (pvpTier->ID != pvpInfo->WeeklyBestWinPvpTierID)
                 return false;
             break;
         }
         case ModifierTreeType::PlayerBestWeeklyWinPvpTierInBracketEqualOrGreaterThan: // 325
         {
-            if (secondaryAsset >= referencePlayer->m_activePlayerData->PvpInfo.size())
+            UF::PVPInfo const* pvpInfo = referencePlayer->GetPvpInfoForBracket(secondaryAsset);
+            if (!pvpInfo)
                 return false;
-            UF::PVPInfo const& pvpInfo = referencePlayer->m_activePlayerData->PvpInfo[secondaryAsset];
-            PvpTierEntry const* pvpTier = sPvpTierStore.LookupEntry(pvpInfo.WeeklyBestWinPvpTierID);
+            PvpTierEntry const* pvpTier = sPvpTierStore.LookupEntry(pvpInfo->WeeklyBestWinPvpTierID);
             if (!pvpTier)
                 return false;
             if (pvpTier->Rank < int32(reqValue))
@@ -3756,11 +3762,143 @@ bool CriteriaHandler::ModifierSatisfied(ModifierTreeEntry const* modifier, uint6
                 return false;
             break;
         }
+        case ModifierTreeType::PlayerAuraWithLabelStackCountEqualOrGreaterThan: // 335
+        {
+            uint32 count = 0;
+            referencePlayer->HasAura([secondaryAsset, &count](Aura const* aura)
+            {
+                if (aura->GetSpellInfo()->HasLabel(secondaryAsset))
+                    count += aura->GetStackAmount();
+                return false;
+            });
+            if (count < reqValue)
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerAuraWithLabelStackCountEqual: // 336
+        {
+            uint32 count = 0;
+            referencePlayer->HasAura([secondaryAsset, &count](Aura const* aura)
+            {
+                if (aura->GetSpellInfo()->HasLabel(secondaryAsset))
+                    count += aura->GetStackAmount();
+                return false;
+            });
+            if (count != reqValue)
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerAuraWithLabelStackCountEqualOrLessThan: // 337
+        {
+            uint32 count = 0;
+            referencePlayer->HasAura([secondaryAsset, &count](Aura const* aura)
+            {
+                if (aura->GetSpellInfo()->HasLabel(secondaryAsset))
+                    count += aura->GetStackAmount();
+                return false;
+            });
+            if (count > reqValue)
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerIsInCrossFactionGroup: // 338
+        {
+            Group const* group = referencePlayer->GetGroup();
+            if (!(group->GetGroupFlags() & GROUP_FLAG_CROSS_FACTION))
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerHasTraitNodeEntryInActiveConfig: // 340
+        {
+            auto hasTraitNodeEntry = [referencePlayer, reqValue]()
+            {
+                for (UF::TraitConfig const& traitConfig : referencePlayer->m_activePlayerData->TraitConfigs)
+                {
+                    if (TraitConfigType(*traitConfig.Type) == TraitConfigType::Combat)
+                    {
+                        if (int32(*referencePlayer->m_activePlayerData->ActiveCombatTraitConfigID) != traitConfig.ID
+                            || !EnumFlag(TraitCombatConfigFlags(*traitConfig.CombatConfigFlags)).HasFlag(TraitCombatConfigFlags::ActiveForSpec))
+                            continue;
+                    }
+
+                    for (UF::TraitEntry const& traitEntry : traitConfig.Entries)
+                        if (traitEntry.TraitNodeEntryID == int32(reqValue))
+                            return true;
+                }
+                return false;
+            }();
+            if (!hasTraitNodeEntry)
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerHasTraitNodeEntryInActiveConfigRankGreaterOrEqualThan: // 341
+        {
+            auto traitNodeEntryRank = [referencePlayer, secondaryAsset]() -> Optional<uint16>
+            {
+                for (UF::TraitConfig const& traitConfig : referencePlayer->m_activePlayerData->TraitConfigs)
+                {
+                    if (TraitConfigType(*traitConfig.Type) == TraitConfigType::Combat)
+                    {
+                        if (int32(*referencePlayer->m_activePlayerData->ActiveCombatTraitConfigID) != traitConfig.ID
+                            || !EnumFlag(TraitCombatConfigFlags(*traitConfig.CombatConfigFlags)).HasFlag(TraitCombatConfigFlags::ActiveForSpec))
+                            continue;
+                    }
+
+                    for (UF::TraitEntry const& traitEntry : traitConfig.Entries)
+                        if (traitEntry.TraitNodeEntryID == int32(secondaryAsset))
+                            return traitEntry.Rank;
+                }
+                return {};
+            }();
+            if (!traitNodeEntryRank || traitNodeEntryRank < int32(reqValue))
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerDaysSinceLogout: // 344
+            if (GameTime::GetGameTime() - referencePlayer->m_playerData->LogoutTime < int64(reqValue) * DAY)
+                return false;
+            break;
+        case ModifierTreeType::PlayerHasPerksProgramPendingReward: // 350
+            if (!referencePlayer->m_activePlayerData->HasPerksProgramPendingReward)
+                return false;
+            break;
+        case ModifierTreeType::PlayerCanUseItem: // 351
+        {
+            ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(reqValue);
+            if (!itemTemplate || !referencePlayer->CanUseItem(itemTemplate))
+                return false;
+            break;
+        }
+        case ModifierTreeType::PlayerHasAtLeastProfPathRanks: // 355
+        {
+            auto traitNodeEntryRankCount = [referencePlayer, secondaryAsset]()
+            {
+                uint32 ranks = 0;
+                for (UF::TraitConfig const& traitConfig : referencePlayer->m_activePlayerData->TraitConfigs)
+                {
+                    if (TraitConfigType(*traitConfig.Type) != TraitConfigType::Profession)
+                        continue;
+
+                    if (*traitConfig.SkillLineID != int32(secondaryAsset))
+                        continue;
+
+                    for (UF::TraitEntry const& traitEntry : traitConfig.Entries)
+                        if (sTraitNodeEntryStore.AssertEntry(traitEntry.TraitNodeEntryID)->GetNodeEntryType() == TraitNodeEntryType::ProfPath)
+                            ranks += traitEntry.Rank + traitEntry.GrantedRanks;
+                }
+                return ranks;
+            }();
+            if (traitNodeEntryRankCount < reqValue)
+                return false;
+            break;
+        }
         default:
             return false;
     }
     return true;
 }
+
+CriteriaList const CriteriaMgr::EmptyCriteriaList;
 
 char const* CriteriaMgr::GetCriteriaTypeString(uint32 type)
 {
@@ -4290,9 +4428,19 @@ CriteriaList const& CriteriaMgr::GetPlayerCriteriaByType(CriteriaType type, uint
         auto itr = _criteriasByAsset[size_t(type)].find(asset);
         if (itr != _criteriasByAsset[size_t(type)].end())
             return itr->second;
+
+        return EmptyCriteriaList;
     }
 
     return _criteriasByType[size_t(type)];
+}
+
+CriteriaList const& CriteriaMgr::GetScenarioCriteriaByTypeAndScenario(CriteriaType type, uint32 scenarioId) const
+{
+    if (CriteriaList const* criteriaList = Trinity::Containers::MapGetValuePtr(_scenarioCriteriasByTypeAndScenarioId[size_t(type)], scenarioId))
+        return *criteriaList;
+
+    return EmptyCriteriaList;
 }
 
 CriteriaMgr::CriteriaMgr() = default;
@@ -4337,7 +4485,7 @@ void CriteriaMgr::LoadCriteriaModifiersTree()
         if (ModifierTreeNode* parentNode = Trinity::Containers::MapGetValuePtr(_criteriaModifiers, criteriaModifier.second->Entry->Parent))
             parentNode->Children.push_back(criteriaModifier.second);
 
-    TC_LOG_INFO("server.loading", ">> Loaded %u criteria modifiers in %u ms", uint32(_criteriaModifiers.size()), GetMSTimeDiffToNow(oldMSTime));
+    TC_LOG_INFO("server.loading", ">> Loaded {} criteria modifiers in {} ms", uint32(_criteriaModifiers.size()), GetMSTimeDiffToNow(oldMSTime));
 }
 
 template<typename T>
@@ -4445,6 +4593,8 @@ void CriteriaMgr::LoadCriteriaList()
 
         _criteria[criteria->ID] = criteria;
 
+        std::vector<uint32> scenarioIds;
+
         for (CriteriaTree const* tree : treeItr->second)
         {
             const_cast<CriteriaTree*>(tree)->Criteria = criteria;
@@ -4459,7 +4609,10 @@ void CriteriaMgr::LoadCriteriaList()
                     criteria->FlagsCu |= CRITERIA_FLAG_CU_PLAYER;
             }
             else if (tree->ScenarioStep)
+            {
                 criteria->FlagsCu |= CRITERIA_FLAG_CU_SCENARIO;
+                scenarioIds.push_back(tree->ScenarioStep->ScenarioID);
+            }
             else if (tree->QuestObjective)
                 criteria->FlagsCu |= CRITERIA_FLAG_CU_QUEST_OBJECTIVE;
         }
@@ -4503,7 +4656,8 @@ void CriteriaMgr::LoadCriteriaList()
         if (criteria->FlagsCu & CRITERIA_FLAG_CU_SCENARIO)
         {
             ++scenarioCriterias;
-            _scenarioCriteriasByType[criteriaEntry->Type].push_back(criteria);
+            for (uint32 scenarioId : scenarioIds)
+                _scenarioCriteriasByTypeAndScenarioId[criteriaEntry->Type][scenarioId].push_back(criteria);
         }
 
         if (criteria->FlagsCu & CRITERIA_FLAG_CU_QUEST_OBJECTIVE)
@@ -4519,7 +4673,7 @@ void CriteriaMgr::LoadCriteriaList()
             _criteriasByFailEvent[criteriaEntry->FailEvent][criteriaEntry->FailAsset].push_back(criteria);
     }
 
-    TC_LOG_INFO("server.loading", ">> Loaded %u criteria, %u guild criteria, %u scenario criteria and %u quest objective criteria in %u ms.", criterias, guildCriterias, scenarioCriterias, questObjectiveCriterias, GetMSTimeDiffToNow(oldMSTime));
+    TC_LOG_INFO("server.loading", ">> Loaded {} criteria, {} guild criteria, {} scenario criteria and {} quest objective criteria in {} ms.", criterias, guildCriterias, scenarioCriterias, questObjectiveCriterias, GetMSTimeDiffToNow(oldMSTime));
 }
 
 void CriteriaMgr::LoadCriteriaData()
@@ -4547,7 +4701,7 @@ void CriteriaMgr::LoadCriteriaData()
 
         if (!criteria)
         {
-            TC_LOG_ERROR("sql.sql", "Table `criteria_data` contains data for non-existing criteria (Entry: %u). Ignored.", criteria_id);
+            TC_LOG_ERROR("sql.sql", "Table `criteria_data` contains data for non-existing criteria (Entry: {}). Ignored.", criteria_id);
             continue;
         }
 
@@ -4557,7 +4711,7 @@ void CriteriaMgr::LoadCriteriaData()
         if (!scriptName.empty())
         {
             if (dataType != CRITERIA_DATA_TYPE_SCRIPT)
-                TC_LOG_ERROR("sql.sql", "Table `criteria_data` contains a ScriptName for non-scripted data type (Entry: %u, type %u), useless data.", criteria_id, dataType);
+                TC_LOG_ERROR("sql.sql", "Table `criteria_data` contains a ScriptName for non-scripted data type (Entry: {}, type {}), useless data.", criteria_id, dataType);
             else
                 scriptId = sObjectMgr->GetScriptId(scriptName);
         }
@@ -4580,7 +4734,7 @@ void CriteriaMgr::LoadCriteriaData()
     }
     while (result->NextRow());
 
-    TC_LOG_INFO("server.loading", ">> Loaded %u additional criteria data in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
+    TC_LOG_INFO("server.loading", ">> Loaded {} additional criteria data in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
 }
 
 CriteriaTree const* CriteriaMgr::GetCriteriaTree(uint32 criteriaTreeId) const

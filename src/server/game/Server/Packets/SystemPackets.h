@@ -21,6 +21,7 @@
 #include "Packet.h"
 #include "ObjectGuid.h"
 #include "Optional.h"
+#include "PacketUtilities.h"
 
 namespace WorldPackets
 {
@@ -113,10 +114,7 @@ namespace WorldPackets
             bool BpayStoreAvailable                  = false;
             bool BpayStoreEnabled                    = false;
             Optional<SessionAlertConfig> SessionAlert;
-            uint32 ScrollOfResurrectionMaxRequestsPerDay = 0;
-            bool ScrollOfResurrectionEnabled         = false;
             Optional<EuropaTicketConfig> EuropaTicketSystemStatus;
-            uint32 ScrollOfResurrectionRequestsRemaining = 0;
             uint32 CfgRealmID                            = 0;
             uint8 ComplaintStatus                        = 0;
             int32 CfgRealmRecID                          = 0;
@@ -128,8 +126,10 @@ namespace WorldPackets
             uint32 ClubsPresenceUpdateTimer              = 0;
             uint32 HiddenUIClubsPresenceUpdateTimer      = 0; ///< Timer for updating club presence when communities ui frame is hidden
             uint32 KioskSessionMinutes                   = 0;
-            int32 GameRuleUnknown1                       = 0;
+            int32 ActiveSeason                           = 0; ///< Currently active Classic season
             int16 MaxPlayerNameQueriesPerPacket          = 50;
+            int16 PlayerNameQueryTelemetryInterval       = 600;
+            Duration<Seconds, uint32> PlayerNameQueryInterval = 10s;
             bool ItemRestorationButtonEnabled        = false;
             bool CharUndeleteEnabled                 = false; ///< Implemented
             bool BpayStoreDisabledByParentalControls = false;
@@ -158,6 +158,8 @@ namespace WorldPackets
             bool ChatDisabledByDefault               = false;
             bool ChatDisabledByPlayer                = false;
             bool LFGListCustomRequiresAuthenticator  = false;
+            bool AddonsDisabled                      = false;
+            bool Unused1000                          = false;
 
             SocialQueueConfig QuickJoinConfig;
             SquelchInfo Squelch;
@@ -189,6 +191,8 @@ namespace WorldPackets
             bool LiveRegionAccountCopyEnabled        = false; // NYI
             bool LiveRegionKeyBindingsCopyEnabled    = false;
             bool Unknown901CheckoutRelated           = false; // NYI
+            bool AddonsDisabled                      = false;
+            bool Unused1000                          = false;
             Optional<EuropaTicketConfig> EuropaTicketSystemStatus;
             std::vector<int32> LiveRegionCharacterCopySourceRegions;
             uint32 TokenPollTimeSeconds              = 0;     // NYI
@@ -200,9 +204,12 @@ namespace WorldPackets
             int32 MinimumExpansionLevel              = 0;
             int32 MaximumExpansionLevel              = 0;
             uint32 KioskSessionMinutes               = 0;
-            int32 GameRuleUnknown1 = 0;
+            int32 ActiveSeason                       = 0;     // Currently active Classic season
             std::vector<GameRuleValuePair> GameRuleValues;
             int16 MaxPlayerNameQueriesPerPacket = 50;
+            int16 PlayerNameQueryTelemetryInterval = 600;
+            Duration<Seconds, uint32> PlayerNameQueryInterval = 10s;
+            Optional<int32> LaunchETA;
         };
 
         class MOTD final : public ServerPacket
@@ -224,6 +231,7 @@ namespace WorldPackets
 
             std::string ServerTimeTZ;
             std::string GameTimeTZ;
+            std::string ServerRegionalTZ;
         };
     }
 }

@@ -26,6 +26,9 @@
 #include "GuildMgr.h"
 #include "Item.h"
 #include "Log.h"
+#include "Loot.h"
+#include "LootItemStorage.h"
+#include "LootMgr.h"
 #include "Map.h"
 #include "Player.h"
 #include "ObjectAccessor.h"
@@ -140,7 +143,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPackets::Spells::OpenItem& packet)
     // ignore for remote control state
     if (player->GetUnitBeingMoved() != player)
         return;
-    TC_LOG_INFO("network", "bagIndex: %u, slot: %u", packet.Slot, packet.PackSlot);
+    TC_LOG_INFO("network", "bagIndex: {}, slot: {}", packet.Slot, packet.PackSlot);
 
     // additional check, client outputs message on its own
     if (!player->IsAlive())
@@ -167,8 +170,8 @@ void WorldSession::HandleOpenItemOpcode(WorldPackets::Spells::OpenItem& packet)
     if (!proto->HasFlag(ITEM_FLAG_HAS_LOOT) && !item->IsWrapped())
     {
         player->SendEquipError(EQUIP_ERR_CLIENT_LOCKED_OUT, item, nullptr);
-        TC_LOG_ERROR("entities.player.cheat", "Possible hacking attempt: Player %s %s tried to open item [%s, entry: %u] which is not openable!",
-            player->GetName().c_str(), player->GetGUID().ToString().c_str(), item->GetGUID().ToString().c_str(), proto->GetId());
+        TC_LOG_ERROR("entities.player.cheat", "Possible hacking attempt: Player {} {} tried to open item [{}, entry: {}] which is not openable!",
+            player->GetName(), player->GetGUID().ToString(), item->GetGUID().ToString(), proto->GetId());
         return;
     }
 
@@ -181,7 +184,7 @@ void WorldSession::HandleOpenItemOpcode(WorldPackets::Spells::OpenItem& packet)
         if (!lockInfo)
         {
             player->SendEquipError(EQUIP_ERR_ITEM_LOCKED, item, nullptr);
-            TC_LOG_ERROR("network", "WORLD::OpenItem: item %s has an unknown lockId: %u!", item->GetGUID().ToString().c_str(), lockId);
+            TC_LOG_ERROR("network", "WORLD::OpenItem: item {} has an unknown lockId: {}!", item->GetGUID().ToString(), lockId);
             return;
         }
 
@@ -198,10 +201,32 @@ void WorldSession::HandleOpenItemOpcode(WorldPackets::Spells::OpenItem& packet)
         CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_GIFT_BY_ITEM);
         stmt->setUInt64(0, item->GetGUID().GetCounter());
         _queryProcessor.AddCallback(CharacterDatabase.AsyncQuery(stmt)
-            .WithPreparedCallback(std::bind(&WorldSession::HandleOpenWrappedItemCallback, this, item->GetPos(), item->GetGUID(), std::placeholders::_1)));
+            .WithPreparedCallback([this, pos = item->GetPos(), itemGuid = item->GetGUID()](PreparedQueryResult result)
+            {
+                HandleOpenWrappedItemCallback(pos, itemGuid, std::move(result));
+            }));
     }
     else
-        player->SendLoot(item->GetGUID(), LOOT_CORPSE);
+    {
+        // If item doesn't already have loot, attempt to load it. If that
+        // fails then this is first time opening, generate loot
+        if (!item->m_lootGenerated && !sLootItemStorage->LoadStoredLoot(item, player))
+        {
+            Loot* loot = new Loot(player->GetMap(), item->GetGUID(), LOOT_ITEM, nullptr);
+            item->m_loot.reset(loot);
+            loot->generateMoneyLoot(item->GetTemplate()->MinMoneyLoot, item->GetTemplate()->MaxMoneyLoot);
+            loot->FillLoot(item->GetEntry(), LootTemplates_Item, player, true, loot->gold != 0);
+
+            // Force save the loot and money items that were just rolled
+            //  Also saves the container item ID in Loot struct (not to DB)
+            if (loot->gold > 0 || loot->unlootedCount > 0)
+                sLootItemStorage->AddNewStoredLoot(item->GetGUID().GetCounter(), loot, player);
+        }
+        if (item->m_loot)
+            player->SendLoot(*item->m_loot);
+        else
+            player->SendLootError(ObjectGuid::Empty, item->GetGUID(), LOOT_ERROR_NO_LOOT);
+    }
 }
 
 void WorldSession::HandleOpenWrappedItemCallback(uint16 pos, ObjectGuid itemGuid, PreparedQueryResult result)
@@ -218,7 +243,7 @@ void WorldSession::HandleOpenWrappedItemCallback(uint16 pos, ObjectGuid itemGuid
 
     if (!result)
     {
-        TC_LOG_ERROR("network", "Wrapped item %s does't have record in character_gifts table and will deleted", item->GetGUID().ToString().c_str());
+        TC_LOG_ERROR("network", "Wrapped item {} does't have record in character_gifts table and will deleted", item->GetGUID().ToString());
         GetPlayer()->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);
         return;
     }
@@ -282,7 +307,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spells::CastSpell& cast)
     SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(cast.Cast.SpellID, mover->GetMap()->GetDifficultyID());
     if (!spellInfo)
     {
-        TC_LOG_ERROR("network", "WORLD: unknown spell id %u", cast.Cast.SpellID);
+        TC_LOG_ERROR("network", "WORLD: unknown spell id {}", cast.Cast.SpellID);
         return;
     }
 
@@ -405,7 +430,7 @@ void WorldSession::HandlePetCancelAuraOpcode(WorldPackets::Spells::PetCancelAura
 {
     if (sSpellMgr->GetSpellInfo(packet.SpellID, DIFFICULTY_NONE))
     {
-        TC_LOG_ERROR("network", "WORLD: unknown PET spell id %u", packet.SpellID);
+        TC_LOG_ERROR("network", "WORLD: unknown PET spell id {}", packet.SpellID);
         return;
     }
 
@@ -413,13 +438,13 @@ void WorldSession::HandlePetCancelAuraOpcode(WorldPackets::Spells::PetCancelAura
 
     if (!pet)
     {
-        TC_LOG_ERROR("network", "HandlePetCancelAura: Attempt to cancel an aura for non-existant %s by player '%s'", packet.PetGUID.ToString().c_str(), GetPlayer()->GetName().c_str());
+        TC_LOG_ERROR("network", "HandlePetCancelAura: Attempt to cancel an aura for non-existant {} by player '{}'", packet.PetGUID.ToString(), GetPlayer()->GetName());
         return;
     }
 
     if (pet != GetPlayer()->GetGuardianPet() && pet != GetPlayer()->GetCharmed())
     {
-        TC_LOG_ERROR("network", "HandlePetCancelAura: %s is not a pet of player '%s'", packet.PetGUID.ToString().c_str(), GetPlayer()->GetName().c_str());
+        TC_LOG_ERROR("network", "HandlePetCancelAura: {} is not a pet of player '{}'", packet.PetGUID.ToString(), GetPlayer()->GetName());
         return;
     }
 
@@ -444,6 +469,19 @@ void WorldSession::HandleCancelGrowthAuraOpcode(WorldPackets::Spells::CancelGrow
 void WorldSession::HandleCancelMountAuraOpcode(WorldPackets::Spells::CancelMountAura& /*cancelMountAura*/)
 {
     _player->RemoveAurasByType(SPELL_AURA_MOUNTED, [](AuraApplication const* aurApp)
+    {
+        SpellInfo const* spellInfo = aurApp->GetBase()->GetSpellInfo();
+        return !spellInfo->HasAttribute(SPELL_ATTR0_NO_AURA_CANCEL) && spellInfo->IsPositive() && !spellInfo->IsPassive();
+    });
+}
+
+void WorldSession::HandleCancelModSpeedNoControlAuras(WorldPackets::Spells::CancelModSpeedNoControlAuras& cancelModSpeedNoControlAuras)
+{
+    Unit* mover = _player->GetUnitBeingMoved();
+    if (!mover || mover->GetGUID() != cancelModSpeedNoControlAuras.TargetGUID)
+        return;
+
+    _player->RemoveAurasByType(SPELL_AURA_MOD_SPEED_NO_CONTROL, [](AuraApplication const* aurApp)
     {
         SpellInfo const* spellInfo = aurApp->GetBase()->GetSpellInfo();
         return !spellInfo->HasAttribute(SPELL_ATTR0_NO_AURA_CANCEL) && spellInfo->IsPositive() && !spellInfo->IsPassive();
