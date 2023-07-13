@@ -130,12 +130,12 @@ ByteBuffer& operator<<(ByteBuffer& data, VendorItem const& item)
 {
     data << uint64(item.Price);
     data << uint32(item.MuID);
+    data << int32(item.Type);
     data << int32(item.Durability);
     data << int32(item.StackCount);
     data << int32(item.Quantity);
     data << int32(item.ExtendedCostID);
     data << int32(item.PlayerConditionFailed);
-    data.WriteBits(item.Type, 3);
     data.WriteBit(item.Locked);
     data.WriteBit(item.DoNotFilterOnVendor);
     data.WriteBit(item.Refundable);
@@ -216,11 +216,11 @@ WorldPacket const* GossipComplete::Write()
 WorldPacket const* GossipPOI::Write()
 {
     _worldPacket << int32(ID);
+    _worldPacket << int32(Flags);
     _worldPacket << Pos;
     _worldPacket << int32(Icon);
     _worldPacket << int32(Importance);
     _worldPacket << int32(WMOGroupID);
-    _worldPacket.WriteBits(Flags, 14);
     _worldPacket.WriteBits(Name.length(), 6);
     _worldPacket.FlushBits();
     _worldPacket.WriteString(Name);

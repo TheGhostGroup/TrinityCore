@@ -92,6 +92,10 @@ WorldPackets::Mail::MailListEntry::MailListEntry(::Mail const* mail, ::Player* p
         case MAIL_GAMEOBJECT:
         case MAIL_AUCTION:
         case MAIL_CALENDAR:
+        case MAIL_BLACKMARKET:
+        case MAIL_COMMERCE_AUCTION:
+        case MAIL_AUCTION_2:
+        case MAIL_ARTISANS_CONSORTIUM:
             AltSenderID = mail->sender;
             break;
     }
@@ -115,7 +119,7 @@ WorldPackets::Mail::MailListEntry::MailListEntry(::Mail const* mail, ::Player* p
 ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Mail::MailListEntry const& entry)
 {
     data << uint64(entry.MailID);
-    data << uint8(entry.SenderType);
+    data << uint32(entry.SenderType);
     data << uint64(entry.Cod);
     data << int32(entry.StationeryID);
     data << uint64(entry.SentMoney);
@@ -123,20 +127,32 @@ ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Mail::MailListEntry const
     data << float(entry.DaysLeft);
     data << int32(entry.MailTemplateID);
     data << uint32(entry.Attachments.size());
-    data.WriteBit(entry.SenderCharacter.has_value());
-    data.WriteBit(entry.AltSenderID.has_value());
+
+    switch (entry.SenderType)
+    {
+        case MAIL_NORMAL:
+            data << entry.SenderCharacter;
+            break;
+        case MAIL_AUCTION:
+        case MAIL_CREATURE:
+        case MAIL_GAMEOBJECT:
+        case MAIL_CALENDAR:
+        case MAIL_BLACKMARKET:
+        case MAIL_COMMERCE_AUCTION:
+        case MAIL_AUCTION_2:
+        case MAIL_ARTISANS_CONSORTIUM:
+            data << int32(entry.AltSenderID);
+            break;
+        default:
+            break;
+    }
+
     data.WriteBits(entry.Subject.size(), 8);
     data.WriteBits(entry.Body.size(), 13);
     data.FlushBits();
 
     for (WorldPackets::Mail::MailAttachedItem const& att : entry.Attachments)
         data << att;
-
-    if (entry.SenderCharacter)
-        data << *entry.SenderCharacter;
-
-    if (entry.AltSenderID)
-        data << int32(*entry.AltSenderID);
 
     data.WriteString(entry.Subject);
     data.WriteString(entry.Body);
@@ -166,6 +182,13 @@ void WorldPackets::Mail::MailCreateTextItem::Read()
     _worldPacket >> MailID;
 }
 
+ByteBuffer& operator>>(ByteBuffer& data, WorldPackets::Mail::SendMail::StructSendMail::MailAttachment& attachment)
+{
+    data >> attachment.AttachPosition;
+    data >> attachment.ItemGUID;
+    return data;
+}
+
 void WorldPackets::Mail::SendMail::Read()
 {
     _worldPacket >> Info.Mailbox;
@@ -183,11 +206,8 @@ void WorldPackets::Mail::SendMail::Read()
     Info.Subject = _worldPacket.ReadString(subjectLength);
     Info.Body = _worldPacket.ReadString(bodyLength);
 
-    for (auto& att : Info.Attachments)
-    {
-        _worldPacket >> att.AttachPosition;
-        _worldPacket >> att.ItemGUID;
-    }
+    for (StructSendMail::MailAttachment& att : Info.Attachments)
+        _worldPacket >> att;
 }
 
 void WorldPackets::Mail::MailReturnToSender::Read()
@@ -245,7 +265,13 @@ WorldPackets::Mail::MailQueryNextTimeResult::MailNextTimeEntry::MailNextTimeEntr
         case MAIL_CREATURE:
         case MAIL_GAMEOBJECT:
         case MAIL_CALENDAR:
+        case MAIL_BLACKMARKET:
+        case MAIL_COMMERCE_AUCTION:
+        case MAIL_AUCTION_2:
+        case MAIL_ARTISANS_CONSORTIUM:
             AltSenderID = mail->sender;
+            break;
+        default:
             break;
     }
 

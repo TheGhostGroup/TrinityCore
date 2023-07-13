@@ -384,8 +384,7 @@ static std::shared_ptr<Trinity::AsyncProcessResult> InvokeAsyncCMakeCommand(T&&.
 static std::string CalculateScriptModuleProjectName(std::string const& module)
 {
     std::string module_project = "scripts_" + module;
-    std::transform(module_project.begin(), module_project.end(),
-                   module_project.begin(), ::tolower);
+    strToLower(module_project);
 
     return module_project;
 }
@@ -1506,7 +1505,7 @@ void LibraryUpdateListener::handleFileAction(efsw::WatchID watchid, std::string 
                 reloader->QueueSharedLibraryChanged(path);
                 break;
             default:
-                WPAbort();
+                ABORT();
                 break;
         }
     });
@@ -1596,7 +1595,7 @@ void SourceUpdateListener::handleFileAction(efsw::WatchID watchid, std::string c
                 reloader->QueueModifySourceFile(script_module_name_, path);
                 break;
             default:
-                WPAbort();
+                ABORT();
                 break;
         }
     });

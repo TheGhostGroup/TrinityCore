@@ -36,6 +36,7 @@
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Item.h"
+#include "ItemBonusMgr.h"
 #include "Log.h"
 #include "Loot.h"
 #include "LootMgr.h"
@@ -269,7 +270,7 @@ public:
                     }
                 }();
                 if (eventId)
-                    GameEvents::Trigger(eventId, &_owner, nullptr);
+                    GameEvents::Trigger(eventId, &_owner, &_owner);
 
                 if (_autoCycleBetweenStopFrames)
                 {
@@ -1209,19 +1210,21 @@ void GameObject::Update(uint32 diff)
                     break;
                 case GAMEOBJECT_TYPE_CHEST:
                     if (m_loot)
+                    {
                         m_loot->Update();
+
+                        // Non-consumable chest was partially looted and restock time passed, restock all loot now
+                        if (GetGOInfo()->chest.consumable == 0 && GetGOInfo()->chest.chestRestockTime && GameTime::GetGameTime() >= m_restockTime)
+                        {
+                            m_restockTime = 0;
+                            m_lootState = GO_READY;
+                            ClearLoot();
+                            UpdateDynamicFlagsForNearbyPlayers();
+                        }
+                    }
 
                     for (auto&& [playerOwner, loot] : m_personalLoot)
                         loot->Update();
-
-                    // Non-consumable chest was partially looted and restock time passed, restock all loot now
-                    if (GetGOInfo()->chest.consumable == 0 && GetGOInfo()->chest.chestRestockTime && GameTime::GetGameTime() >= m_restockTime)
-                    {
-                        m_restockTime = 0;
-                        m_lootState = GO_READY;
-                        ClearLoot();
-                        UpdateDynamicFlagsForNearbyPlayers();
-                    }
                     break;
                 case GAMEOBJECT_TYPE_TRAP:
                 {
@@ -1459,9 +1462,10 @@ Loot* GameObject::GetFishLoot(Player* lootOwner)
     Loot* fishLoot = new Loot(GetMap(), GetGUID(), LOOT_FISHING, nullptr);
 
     uint32 areaId = GetAreaId();
+    ItemContext itemContext = ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), lootOwner);
     while (AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(areaId))
     {
-        fishLoot->FillLoot(areaId, LootTemplates_Fishing, lootOwner, true, true);
+        fishLoot->FillLoot(areaId, LootTemplates_Fishing, lootOwner, true, true, LOOT_MODE_DEFAULT, itemContext);
         if (!fishLoot->isLooted())
             break;
 
@@ -1469,7 +1473,7 @@ Loot* GameObject::GetFishLoot(Player* lootOwner)
     }
 
     if (fishLoot->isLooted())
-        fishLoot->FillLoot(defaultzone, LootTemplates_Fishing, lootOwner, true, true);
+        fishLoot->FillLoot(defaultzone, LootTemplates_Fishing, lootOwner, true, true, LOOT_MODE_DEFAULT, itemContext);
 
     return fishLoot;
 }
@@ -1481,9 +1485,10 @@ Loot* GameObject::GetFishLootJunk(Player* lootOwner)
     Loot* fishLoot = new Loot(GetMap(), GetGUID(), LOOT_FISHING_JUNK, nullptr);
 
     uint32 areaId = GetAreaId();
+    ItemContext itemContext = ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), lootOwner);
     while (AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(areaId))
     {
-        fishLoot->FillLoot(areaId, LootTemplates_Fishing, lootOwner, true, true, LOOT_MODE_JUNK_FISH);
+        fishLoot->FillLoot(areaId, LootTemplates_Fishing, lootOwner, true, true, LOOT_MODE_JUNK_FISH, itemContext);
         if (!fishLoot->isLooted())
             break;
 
@@ -1491,7 +1496,7 @@ Loot* GameObject::GetFishLootJunk(Player* lootOwner)
     }
 
     if (fishLoot->isLooted())
-        fishLoot->FillLoot(defaultzone, LootTemplates_Fishing, lootOwner, true, true, LOOT_MODE_JUNK_FISH);
+        fishLoot->FillLoot(defaultzone, LootTemplates_Fishing, lootOwner, true, true, LOOT_MODE_JUNK_FISH, itemContext);
 
     return fishLoot;
 }
@@ -1791,15 +1796,15 @@ void GameObject::SaveRespawnTime(uint32 forceDelay)
     }
 }
 
-bool GameObject::IsNeverVisibleFor(WorldObject const* seer) const
+bool GameObject::IsNeverVisibleFor(WorldObject const* seer, bool allowServersideObjects) const
 {
     if (WorldObject::IsNeverVisibleFor(seer))
         return true;
 
-    if (GetGOInfo()->GetServerOnly())
+    if (GetGOInfo()->GetServerOnly() && !allowServersideObjects)
         return true;
 
-    if (!GetDisplayId())
+    if (!GetDisplayId() && GetGOInfo()->IsDisplayMandatory())
         return true;
 
     return false;
@@ -2240,7 +2245,7 @@ void GameObject::Use(Unit* user)
                     m_loot.reset(loot);
 
                     loot->SetDungeonEncounterId(info->chest.DungeonEncounter);
-                    loot->FillLoot(info->GetLootId(), LootTemplates_Gameobject, player, !groupRules, false, GetLootMode(), GetMap()->GetDifficultyLootItemContext());
+                    loot->FillLoot(info->GetLootId(), LootTemplates_Gameobject, player, !groupRules, false, GetLootMode(), ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), player));
 
                     if (GetLootMode() > 0)
                         if (GameObjectTemplateAddon const* addon = GetTemplateAddon())
@@ -2271,7 +2276,7 @@ void GameObject::Use(Unit* user)
 
                         m_personalLoot = GenerateDungeonEncounterPersonalLoot(info->chest.DungeonEncounter, info->chest.chestPersonalLoot,
                             LootTemplates_Gameobject, LOOT_CHEST, this, addon ? addon->Mingold : 0, addon ? addon->Maxgold : 0,
-                            GetLootMode(), GetMap()->GetDifficultyLootItemContext(), tappers);
+                            GetLootMode(), GetMap()->GetMapDifficulty(), tappers);
                     }
                     else
                     {
@@ -2279,7 +2284,7 @@ void GameObject::Use(Unit* user)
                         m_personalLoot[player->GetGUID()].reset(loot);
 
                         loot->SetDungeonEncounterId(info->chest.DungeonEncounter);
-                        loot->FillLoot(info->chest.chestPersonalLoot, LootTemplates_Gameobject, player, true, false, GetLootMode(), GetMap()->GetDifficultyLootItemContext());
+                        loot->FillLoot(info->chest.chestPersonalLoot, LootTemplates_Gameobject, player, true, false, GetLootMode(), ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), player));
 
                         if (GetLootMode() > 0 && addon)
                             loot->generateMoneyLoot(addon->Mingold, addon->Maxgold);
@@ -2292,7 +2297,7 @@ void GameObject::Use(Unit* user)
                 if (info->chest.chestPushLoot)
                 {
                     Loot pushLoot(GetMap(), GetGUID(), LOOT_CHEST, nullptr);
-                    pushLoot.FillLoot(info->chest.chestPushLoot, LootTemplates_Gameobject, player, true, false, GetLootMode(), GetMap()->GetDifficultyLootItemContext());
+                    pushLoot.FillLoot(info->chest.chestPushLoot, LootTemplates_Gameobject, player, true, false, GetLootMode(), ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), player));
                     pushLoot.AutoStore(player, NULL_BAG, NULL_SLOT);
                 }
 
@@ -2525,34 +2530,37 @@ void GameObject::Use(Unit* user)
 
                     SendUpdateToPlayer(player);
 
-                    uint32 zone, subzone;
-                    GetZoneAndAreaId(zone, subzone);
-
-                    int32 zone_skill = sObjectMgr->GetFishingBaseSkillLevel(subzone);
-                    if (!zone_skill)
-                        zone_skill = sObjectMgr->GetFishingBaseSkillLevel(zone);
-
-                    //provide error, no fishable zone or area should be 0
-                    if (!zone_skill)
-                        TC_LOG_ERROR("sql.sql", "Fishable areaId {} are not properly defined in `skill_fishing_base_level`.", subzone);
-
-                    int32 skill = player->GetSkillValue(SKILL_FISHING);
-
-                    int32 chance;
-                    if (skill < zone_skill)
+                    AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(GetAreaId());
+                    if (!areaEntry)
                     {
-                        chance = int32(pow((double)skill/zone_skill, 2) * 100);
+                        TC_LOG_ERROR("entities.gameobject", "Gameobject '{}' ({}) spawned in unknown area (x: {} y: {} z: {} map: {})",
+                            GetEntry(), GetGUID().ToString(), GetPositionX(), GetPositionY(), GetPositionZ(), GetMapId());
+                        break;
+                    }
+
+                    // Update the correct fishing skill according to the area's ContentTuning
+                    ContentTuningEntry const* areaContentTuning = DB2Manager::GetContentTuningForArea(areaEntry);
+                    if (!areaContentTuning)
+                        break;
+
+                    player->UpdateFishingSkill(areaContentTuning->ExpansionID);
+
+                    // Send loot
+                    int32 areaFishingLevel = sObjectMgr->GetFishingBaseSkillLevel(areaEntry);
+
+                    uint32 playerFishingSkill = player->GetProfessionSkillForExp(SKILL_FISHING, areaContentTuning->ExpansionID);
+                    int32 playerFishingLevel = player->GetSkillValue(playerFishingSkill);
+
+                    int32 roll = irand(1, 100);
+                    int32 chance = 100;
+                    if (playerFishingLevel < areaFishingLevel)
+                    {
+                        chance = int32(pow((double)playerFishingLevel / areaFishingLevel, 2) * 100);
                         if (chance < 1)
                             chance = 1;
                     }
-                    else
-                        chance = 100;
 
-                    int32 roll = irand(1, 100);
-
-                    TC_LOG_DEBUG("misc", "Fishing check (skill: {} zone min skill: {} chance {} roll: {}", skill, zone_skill, chance, roll);
-
-                    player->UpdateFishingSkill();
+                    TC_LOG_DEBUG("misc", "Fishing check (skill {} level: {} area skill level: {} chance {} roll: {}", playerFishingSkill, playerFishingLevel, areaFishingLevel, chance, roll);
 
                     /// @todo find reasonable value for fishing hole search
                     GameObject* fishingPool = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
@@ -2795,7 +2803,7 @@ void GameObject::Use(Unit* user)
             Player* player = user->ToPlayer();
 
             Loot* loot = new Loot(GetMap(), GetGUID(), LOOT_FISHINGHOLE, nullptr);
-            loot->FillLoot(GetGOInfo()->GetLootId(), LootTemplates_Gameobject, player, true);
+            loot->FillLoot(GetGOInfo()->GetLootId(), LootTemplates_Gameobject, player, true, false, LOOT_MODE_DEFAULT, ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), player));
             m_personalLoot[player->GetGUID()].reset(loot);
 
             player->SendLoot(*loot);
@@ -2864,8 +2872,9 @@ void GameObject::Use(Unit* user)
 
             Player* player = user->ToPlayer();
 
-            WorldPackets::Misc::EnableBarberShop packet;
-            player->SendDirectMessage(packet.Write());
+            WorldPackets::Misc::EnableBarberShop enableBarberShop;
+            enableBarberShop.CustomizationScope = info->barberChair.CustomizationScope;
+            player->SendDirectMessage(enableBarberShop.Write());
 
             // fallback, will always work
             player->TeleportTo(GetMapId(), GetPositionX(), GetPositionY(), GetPositionZ(), GetOrientation(), TELE_TO_NOT_LEAVE_TRANSPORT | TELE_TO_NOT_LEAVE_COMBAT | TELE_TO_NOT_UNSUMMON_PET);
@@ -2977,7 +2986,7 @@ void GameObject::Use(Unit* user)
                     Loot* loot = new Loot(GetMap(), GetGUID(), LOOT_CHEST, nullptr);
                     m_personalLoot[player->GetGUID()].reset(loot);
 
-                    loot->FillLoot(info->gatheringNode.chestLoot, LootTemplates_Gameobject, player, true, false, GetLootMode(), GetMap()->GetDifficultyLootItemContext());
+                    loot->FillLoot(info->gatheringNode.chestLoot, LootTemplates_Gameobject, player, true, false, GetLootMode(), ItemBonusMgr::GetContextForPlayer(GetMap()->GetMapDifficulty(), player));
                 }
 
                 if (info->gatheringNode.triggeredEvent)
@@ -3303,7 +3312,7 @@ void GameObject::SetLootState(LootState state, Unit* unit)
     AI()->OnLootStateChanged(state, unit);
 
     // Start restock timer if the chest is partially looted or not looted at all
-    if (GetGoType() == GAMEOBJECT_TYPE_CHEST && state == GO_ACTIVATED && GetGOInfo()->chest.chestRestockTime > 0 && m_restockTime == 0)
+    if (GetGoType() == GAMEOBJECT_TYPE_CHEST && state == GO_ACTIVATED && GetGOInfo()->chest.chestRestockTime > 0 && m_restockTime == 0 && m_loot && m_loot->IsChanged())
         m_restockTime = GameTime::GetGameTime() + GetGOInfo()->chest.chestRestockTime;
 
     if (GetGoType() == GAMEOBJECT_TYPE_DOOR) // only set collision for doors on SetGoState

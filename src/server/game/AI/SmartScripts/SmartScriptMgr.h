@@ -21,6 +21,7 @@
 #include "Define.h"
 #include "ObjectGuid.h"
 #include "WaypointDefines.h"
+#include "advstd.h"
 #include <limits>
 #include <map>
 #include <string>
@@ -185,8 +186,9 @@ enum SMART_EVENT
     SMART_EVENT_ON_SPELL_FAILED          = 84,      // SpellID, CooldownMin, CooldownMax
     SMART_EVENT_ON_SPELL_START           = 85,      // SpellID, CooldownMin, CooldownMax
     SMART_EVENT_ON_DESPAWN               = 86,      // NONE
+    SMART_EVENT_SEND_EVENT_TRIGGER       = 87,      // NONE
 
-    SMART_EVENT_END                      = 87
+    SMART_EVENT_END                      = 88
 };
 
 struct SmartEvent
@@ -865,7 +867,7 @@ struct SmartAction
 
         struct
         {
-            SAIBool run;
+            SAIBool run; // unused / overridden by waypoint_data
             uint32 pathID;
             SAIBool repeat;
             uint32 quest;
@@ -1443,18 +1445,18 @@ struct SmartTarget
 
 enum SmartScriptType
 {
-    SMART_SCRIPT_TYPE_CREATURE = 0, //done
-    SMART_SCRIPT_TYPE_GAMEOBJECT = 1, //done
-    SMART_SCRIPT_TYPE_AREATRIGGER = 2, //done
-    SMART_SCRIPT_TYPE_EVENT = 3, //
-    SMART_SCRIPT_TYPE_GOSSIP = 4, //
-    SMART_SCRIPT_TYPE_QUEST = 5, //done
-    SMART_SCRIPT_TYPE_SPELL = 6, //
-    SMART_SCRIPT_TYPE_TRANSPORT = 7, //
-    SMART_SCRIPT_TYPE_INSTANCE = 8, //
-    SMART_SCRIPT_TYPE_TIMED_ACTIONLIST = 9, //
-    SMART_SCRIPT_TYPE_SCENE = 10, //done
-    SMART_SCRIPT_TYPE_AREATRIGGER_ENTITY = 11,
+    SMART_SCRIPT_TYPE_CREATURE                      = 0,
+    SMART_SCRIPT_TYPE_GAMEOBJECT                    = 1,
+    SMART_SCRIPT_TYPE_AREATRIGGER                   = 2,
+    SMART_SCRIPT_TYPE_EVENT                         = 3,
+    SMART_SCRIPT_TYPE_GOSSIP                        = 4,  // NYI
+    SMART_SCRIPT_TYPE_QUEST                         = 5,
+    SMART_SCRIPT_TYPE_SPELL                         = 6,  // NYI
+    SMART_SCRIPT_TYPE_TRANSPORT                     = 7,  // NYI
+    SMART_SCRIPT_TYPE_INSTANCE                      = 8,  // NYI
+    SMART_SCRIPT_TYPE_TIMED_ACTIONLIST              = 9,
+    SMART_SCRIPT_TYPE_SCENE                         = 10,
+    SMART_SCRIPT_TYPE_AREATRIGGER_ENTITY            = 11,
     SMART_SCRIPT_TYPE_AREATRIGGER_ENTITY_SERVERSIDE = 12,
     SMART_SCRIPT_TYPE_MAX
 };
@@ -1581,6 +1583,7 @@ const uint32 SmartAIEventMask[SMART_EVENT_END][2] =
     {SMART_EVENT_ON_SPELL_FAILED,           SMART_SCRIPT_TYPE_MASK_CREATURE },
     {SMART_EVENT_ON_SPELL_START,            SMART_SCRIPT_TYPE_MASK_CREATURE },
     {SMART_EVENT_ON_DESPAWN,                SMART_SCRIPT_TYPE_MASK_CREATURE },
+    {SMART_EVENT_SEND_EVENT_TRIGGER,        SMART_SCRIPT_TYPE_MASK_EVENT }
 };
 
 enum SmartEventFlags
@@ -1643,9 +1646,19 @@ struct SmartScriptHolder
 
     operator bool() const { return entryOrGuid != 0; }
     // Default comparision operator using priority field as first ordering field
-    bool operator<(SmartScriptHolder const& other) const
+    std::strong_ordering operator<=>(SmartScriptHolder const& right) const
     {
-        return std::tie(priority, entryOrGuid, source_type, event_id, link) < std::tie(other.priority, other.entryOrGuid, other.source_type, other.event_id, other.link);
+        if (std::strong_ordering cmp = priority <=> right.priority; advstd::is_neq(cmp))
+            return cmp;
+        if (std::strong_ordering cmp = entryOrGuid <=> right.entryOrGuid; advstd::is_neq(cmp))
+            return cmp;
+        if (std::strong_ordering cmp = source_type <=> right.source_type; advstd::is_neq(cmp))
+            return cmp;
+        if (std::strong_ordering cmp = event_id <=> right.event_id; advstd::is_neq(cmp))
+            return cmp;
+        if (std::strong_ordering cmp = link <=> right.link; advstd::is_neq(cmp))
+            return cmp;
+        return std::strong_ordering::equal;
     }
 
     static constexpr uint32 DEFAULT_PRIORITY = std::numeric_limits<uint32>::max();
@@ -1676,24 +1689,6 @@ class ObjectGuidVector
         void UpdateObjects(WorldObject const& ref) const;
 };
 typedef std::unordered_map<uint32, ObjectGuidVector> ObjectVectorMap;
-
-class TC_GAME_API SmartWaypointMgr
-{
-    public:
-        static SmartWaypointMgr* instance();
-
-        void LoadFromDB();
-
-        WaypointPath const* GetPath(uint32 id);
-
-    private:
-        SmartWaypointMgr() { }
-        ~SmartWaypointMgr() { }
-
-        std::unordered_map<uint32, WaypointPath> _waypointStore;
-};
-
-#define sSmartWaypointMgr SmartWaypointMgr::instance()
 
 // all events for a single entry
 typedef std::vector<SmartScriptHolder> SmartAIEventList;

@@ -32,7 +32,7 @@ class GameObject;
 class PlayerAI;
 class WorldObject;
 struct Position;
-enum class QuestGiverStatus : uint32;
+enum class QuestGiverStatus : uint64;
 
 typedef std::vector<AreaBoundary const*> CreatureBoundary;
 
@@ -155,7 +155,8 @@ class TC_GAME_API CreatureAI : public UnitAI
         // Called at reaching home after evade
         virtual void JustReachedHome() { }
 
-        void DoZoneInCombat(Creature* creature = nullptr);
+        void DoZoneInCombat() { DoZoneInCombat(me); }
+        static void DoZoneInCombat(Creature* creature);
 
         // Called at text emote receive from player
         virtual void ReceiveEmote(Player* /*player*/, uint32 /*emoteId*/) { }
@@ -188,7 +189,7 @@ class TC_GAME_API CreatureAI : public UnitAI
         /// == Gossip system ================================
 
         // Called when the dialog status between a player and the creature is requested.
-        virtual Optional<QuestGiverStatus> GetDialogStatus(Player* player);
+        virtual Optional<QuestGiverStatus> GetDialogStatus(Player const* player);
 
         // Called when a player opens a gossip dialog with the creature.
         virtual bool OnGossipHello(Player* /*player*/) { return false; }

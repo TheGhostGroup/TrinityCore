@@ -280,6 +280,8 @@ void AuctionBrowseQuery::Read()
     _worldPacket >> Offset;
     _worldPacket >> MinLevel;
     _worldPacket >> MaxLevel;
+    _worldPacket >> Unused1007_1;
+    _worldPacket >> Unused1007_2;
     Filters = _worldPacket.read<AuctionHouseFilterMask, uint32>();
 
     uint32 knownPetsSize = _worldPacket.read<uint32>();
@@ -586,7 +588,8 @@ WorldPacket const* AuctionFavoriteList::Write()
 WorldPacket const* AuctionHelloResponse::Write()
 {
     _worldPacket << Guid;
-    _worldPacket << uint32(DeliveryDelay);
+    _worldPacket << uint32(PurchasedItemDeliveryDelay);
+    _worldPacket << uint32(CancelledItemDeliveryDelay);
     _worldPacket.WriteBit(OpenForBusiness);
     _worldPacket.FlushBits();
 

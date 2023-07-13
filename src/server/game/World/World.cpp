@@ -61,6 +61,7 @@
 #include "GuildMgr.h"
 #include "InstanceLockMgr.h"
 #include "IPLocation.h"
+#include "ItemBonusMgr.h"
 #include "Language.h"
 #include "LanguageMgr.h"
 #include "LFGMgr.h"
@@ -631,6 +632,7 @@ void World::LoadConfigSettings(bool reload)
     setRegenRate(RATE_POWER_ARCANE_CHARGES, "Rate.ArcaneCharges.Loss");
     setRegenRate(RATE_POWER_FURY, "Rate.Fury.Loss");
     setRegenRate(RATE_POWER_PAIN, "Rate.Pain.Loss");
+    setRegenRate(RATE_POWER_ESSENCE, "Rate.Essence.Loss");
 
     rate_values[RATE_SKILL_DISCOVERY]      = sConfigMgr->GetFloatDefault("Rate.Skill.Discovery", 1.0f);
     rate_values[RATE_DROP_ITEM_POOR]       = sConfigMgr->GetFloatDefault("Rate.Drop.Item.Poor", 1.0f);
@@ -1786,6 +1788,13 @@ void World::SetInitialWorldSettings()
         exit(1);
     }
 
+    TC_LOG_INFO("server.loading", "Loading GameObject models...");
+    if (!LoadGameObjectModelList(m_dataPath))
+    {
+        TC_LOG_FATAL("server.loading", "Unable to load gameobject models (part of vmaps), objects using WMO models will crash the client - server shutting down!");
+        exit(1);
+    }
+
     TC_LOG_INFO("misc", "Loading hotfix blobs...");
     sDB2Manager.LoadHotfixBlob(m_availableDbcLocaleMask);
     TC_LOG_INFO("misc", "Loading hotfix info...");
@@ -1869,13 +1878,6 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading languages words...");
     sLanguageMgr->LoadLanguagesWords();
 
-    TC_LOG_INFO("server.loading", "Loading GameObject models...");
-    if (!LoadGameObjectModelList(m_dataPath))
-    {
-        TC_LOG_FATAL("server.loading", "Unable to load gameobject models, objects using WMO models will crash the client - server shutting down!");
-        exit(1);
-    }
-
     TC_LOG_INFO("server.loading", "Loading Instance Template...");
     sObjectMgr->LoadInstanceTemplate();
 
@@ -1953,6 +1955,9 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Enchant Spells Proc datas...");
     sSpellMgr->LoadSpellEnchantProcData();
 
+    TC_LOG_INFO("server.loading", "Loading item bonus data...");
+    ItemBonusMgr::Load();
+
     TC_LOG_INFO("server.loading", "Loading Random item bonus list definitions...");
     LoadItemRandomBonusListTemplates();
 
@@ -1980,8 +1985,11 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Creature template addons...");
     sObjectMgr->LoadCreatureTemplateAddons();
 
-    TC_LOG_INFO("server.loading", "Loading Creature template scaling...");
-    sObjectMgr->LoadCreatureScalingData();
+    TC_LOG_INFO("server.loading", "Loading Creature template difficulty...");
+    sObjectMgr->LoadCreatureTemplateDifficulty();
+
+    TC_LOG_INFO("server.loading", "Loading Creature template sparring...");
+    sObjectMgr->LoadCreatureTemplateSparring();
 
     TC_LOG_INFO("server.loading", "Loading Reputation Reward Rates...");
     sObjectMgr->LoadReputationRewardRate();
@@ -2256,6 +2264,9 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Gossip menu addon...");
     sObjectMgr->LoadGossipMenuAddon();
 
+    TC_LOG_INFO("server.loading", "Loading Creature Template Gossip...");
+    sObjectMgr->LoadCreatureTemplateGossip();
+
     TC_LOG_INFO("server.loading", "Loading Creature trainers...");
     sObjectMgr->LoadCreatureTrainers();                         // must be after LoadGossipMenuItems
 
@@ -2264,9 +2275,6 @@ void World::SetInitialWorldSettings()
 
     TC_LOG_INFO("server.loading", "Loading Waypoints...");
     sWaypointMgr->Load();
-
-    TC_LOG_INFO("server.loading", "Loading SmartAI Waypoints...");
-    sSmartWaypointMgr->LoadFromDB();
 
     TC_LOG_INFO("server.loading", "Loading Creature Formations...");
     sFormationMgr->LoadCreatureFormations();
@@ -2486,9 +2494,6 @@ void World::SetInitialWorldSettings()
 
     TC_LOG_INFO("server.loading", "Loading character templates...");
     sCharacterTemplateDataStore->LoadCharacterTemplates();
-
-    TC_LOG_INFO("server.loading", "Loading realm names...");
-    sObjectMgr->LoadRealmNames();
 
     TC_LOG_INFO("server.loading", "Loading battle pets info...");
     BattlePets::BattlePetMgr::Initialize();
@@ -3513,6 +3518,19 @@ void World::DailyReset()
         if (Player* player = itr->second->GetPlayer())
             player->DailyReset();
 
+    {
+        std::ostringstream questIds;
+        questIds << "DELETE cq, cqo FROM character_queststatus cq LEFT JOIN character_queststatus_objectives cqo ON cq.quest = cqo.quest WHERE cq.quest IN (";
+        for (auto const& [questId, quest] : sObjectMgr->GetQuestTemplates())
+        {
+            if (quest.IsDaily() && quest.HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
+                questIds << questId << ',';
+        }
+        questIds << "0)";
+
+        CharacterDatabase.Execute(questIds.str().c_str());
+    }
+
     // reselect pools
     sQuestPoolMgr->ChangeDailyQuests();
 
@@ -3548,6 +3566,19 @@ void World::ResetWeeklyQuests()
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
         if (Player* player = itr->second->GetPlayer())
             player->ResetWeeklyQuestStatus();
+
+    {
+        std::ostringstream questIds;
+        questIds << "DELETE cq, cqo FROM character_queststatus cq LEFT JOIN character_queststatus_objectives cqo ON cq.quest = cqo.quest WHERE cq.quest IN (";
+        for (auto const& [questId, quest] : sObjectMgr->GetQuestTemplates())
+        {
+            if (quest.IsWeekly() && quest.HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
+                questIds << questId << ',';
+        }
+        questIds << "0)";
+
+        CharacterDatabase.Execute(questIds.str().c_str());
+    }
 
     // reselect pools
     sQuestPoolMgr->ChangeWeeklyQuests();

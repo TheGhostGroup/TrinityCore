@@ -87,7 +87,7 @@ struct is_script_database_bound<AreaTriggerScript>
 
 template<>
 struct is_script_database_bound<BattlefieldScript>
-        : std::true_type { };
+    : std::true_type { };
 
 template<>
 struct is_script_database_bound<BattlegroundScript>
@@ -135,6 +135,10 @@ struct is_script_database_bound<QuestScript>
 
 template<>
 struct is_script_database_bound<WorldStateScript>
+    : std::true_type { };
+
+template<>
+struct is_script_database_bound<EventScript>
     : std::true_type { };
 
 enum Spells
@@ -536,7 +540,7 @@ class CreatureGameObjectAreaTriggerScriptRegistrySwapHooks
 
     static void LoadResetScript(AreaTrigger* at)
     {
-        at->AI()->OnCreate();
+        at->AI()->OnCreate(nullptr);
     }
 
     static Creature* GetEntityFromMap(std::common_type<Creature>, Map* map, ObjectGuid const& guid)
@@ -1338,7 +1342,6 @@ void ScriptMgr::Unload()
 
 void ScriptMgr::LoadDatabase()
 {
-    sScriptSystemMgr->LoadScriptWaypoints();
     sScriptSystemMgr->LoadScriptSplineChains();
 }
 
@@ -2260,6 +2263,14 @@ void ScriptMgr::OnConversationCreate(Conversation* conversation, Unit* creator)
     tmpscript->OnConversationCreate(conversation, creator);
 }
 
+void ScriptMgr::OnConversationStart(Conversation* conversation)
+{
+    ASSERT(conversation);
+
+    GET_SCRIPT(ConversationScript, conversation->GetScriptId(), tmpscript);
+    tmpscript->OnConversationStart(conversation);
+}
+
 void ScriptMgr::OnConversationLineStarted(Conversation* conversation, uint32 lineId, Player* sender)
 {
     ASSERT(conversation);
@@ -2267,6 +2278,14 @@ void ScriptMgr::OnConversationLineStarted(Conversation* conversation, uint32 lin
 
     GET_SCRIPT(ConversationScript, conversation->GetScriptId(), tmpscript);
     tmpscript->OnConversationLineStarted(conversation, lineId, sender);
+}
+
+void ScriptMgr::OnConversationUpdate(Conversation* conversation, uint32 diff)
+{
+    ASSERT(conversation);
+
+    GET_SCRIPT(ConversationScript, conversation->GetScriptId(), tmpscript);
+    tmpscript->OnConversationUpdate(conversation, diff);
 }
 
 // Scene
@@ -2341,6 +2360,15 @@ void ScriptMgr::OnWorldStateValueChange(WorldStateTemplate const* worldStateTemp
 
     GET_SCRIPT(WorldStateScript, worldStateTemplate->ScriptId, tmpscript);
     tmpscript->OnValueChange(worldStateTemplate->Id, oldValue, newValue, map);
+}
+
+// Event
+void ScriptMgr::OnEventTrigger(WorldObject* object, WorldObject* invoker, uint32 eventId)
+{
+    ASSERT(invoker);
+
+    GET_SCRIPT(EventScript, sObjectMgr->GetEventScriptId(eventId), tmpscript);
+    tmpscript->OnTrigger(object, invoker, eventId);
 }
 
 SpellScriptLoader::SpellScriptLoader(char const* name)
@@ -3126,7 +3154,15 @@ void ConversationScript::OnConversationCreate(Conversation* /*conversation*/, Un
 {
 }
 
+void ConversationScript::OnConversationStart(Conversation* /*conversation*/ )
+{
+}
+
 void ConversationScript::OnConversationLineStarted(Conversation* /*conversation*/, uint32 /*lineId*/, Player* /*sender*/)
+{
+}
+
+void ConversationScript::OnConversationUpdate(Conversation* /*conversation*/, uint32 /*diff*/)
 {
 }
 
@@ -3186,6 +3222,18 @@ void WorldStateScript::OnValueChange(int32 /*worldStateId*/, int32 /*oldValue*/,
 {
 }
 
+EventScript::EventScript(char const* name)
+    : ScriptObject(name)
+{
+    ScriptRegistry<EventScript>::Instance()->AddScript(this);
+}
+
+EventScript::~EventScript() = default;
+
+void EventScript::OnTrigger(WorldObject* /*object*/, WorldObject* /*invoker*/, uint32 /*eventId*/)
+{
+}
+
 // Specialize for each script type class like so:
 template class TC_GAME_API ScriptRegistry<SpellScriptLoader>;
 template class TC_GAME_API ScriptRegistry<ServerScript>;
@@ -3220,3 +3268,4 @@ template class TC_GAME_API ScriptRegistry<ConversationScript>;
 template class TC_GAME_API ScriptRegistry<SceneScript>;
 template class TC_GAME_API ScriptRegistry<QuestScript>;
 template class TC_GAME_API ScriptRegistry<WorldStateScript>;
+template class TC_GAME_API ScriptRegistry<EventScript>;
