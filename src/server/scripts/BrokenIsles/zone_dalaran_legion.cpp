@@ -42,6 +42,21 @@ enum BlinkOfAnEye
     AULDBRIDGE_PATH = 11110910,
 
     WAYPOINT_22,
+
+	SPELL_SUMMON_WARRIOR_HORDE    = 216443, 
+    SPELL_SUMMON_WARRIOR_ALLIANCE = 216497, 
+    SPELL_SUMMON_PALADIN          = 190886,
+    SPELL_SUMMON_HUNTER           = 196908,
+    SPELL_SUMMON_ROGUE            = 201208,
+    SPELL_SUMMON_PRIEST_HORDE     = 226409,
+    SPELL_SUMMON_PRIEST_ALLIANCE  = 226412,
+    SPELL_SUMMON_DK               = 200023,
+    SPELL_SUMMON_SHAMAN           = 227324,
+    SPELL_SUMMON_MAGE             = 195356,
+    SPELL_SUMMON_WARLOCK          = 204860,
+    SPELL_SUMMON_MONK             = 193978,
+    SPELL_SUMMON_DRUID            = 199277,
+    SPELL_SUMMON_DH               = 195286
 };
 
 class scene_dalaran_teleportation : public SceneScript

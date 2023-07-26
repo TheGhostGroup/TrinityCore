@@ -54,7 +54,7 @@ enum CreatureText_RogueOrderhall
 	SAY_LORD_JORACH_RAVENHOLDT_FIRST_LINE    = 0,
 	SAY_LORD_JORACH_RAVENHOLDT_SECOND_LINE   = 1,
 	SAY_FLEET_ADMIRAL_TETHYS_FIRST_LINE      = 0,
-}:
+};
 
 enum Quests_RogueOrderhall
 {
