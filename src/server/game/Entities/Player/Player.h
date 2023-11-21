@@ -43,6 +43,7 @@ struct AzeriteEssencePowerEntry;
 struct AzeriteItemMilestonePowerEntry;
 struct AzeritePowerEntry;
 struct BarberShopStyleEntry;
+struct BattlegroundTemplate;
 struct CharTitlesEntry;
 struct ChatChannelsEntry;
 struct ChrSpecializationEntry;
@@ -65,6 +66,7 @@ struct TalentEntry;
 struct TrainerSpell;
 struct TransferAbortParams;
 struct VendorItem;
+struct WorldSafeLocsEntry;
 
 class AELootResult;
 class Bag;
@@ -92,6 +94,7 @@ class RestMgr;
 class SpellCastTargets;
 class TradeData;
 
+enum class ChrSpecialization : uint32;
 enum GroupCategory : uint8;
 enum class InstanceResetMethod : uint8;
 enum class InstanceResetResult : uint8;
@@ -114,6 +117,7 @@ namespace WorldPackets
     namespace Character
     {
         struct CharacterCreateInfo;
+        struct CustomTabardInfo;
     }
 
     namespace Movement
@@ -204,46 +208,6 @@ struct StoredAuraTeleportLocation
     } State;
 };
 
-enum TalentSpecialization // talent tabs
-{
-    TALENT_SPEC_MAGE_ARCANE             = 62,
-    TALENT_SPEC_MAGE_FIRE               = 63,
-    TALENT_SPEC_MAGE_FROST              = 64,
-    TALENT_SPEC_PALADIN_HOLY            = 65,
-    TALENT_SPEC_PALADIN_PROTECTION      = 66,
-    TALENT_SPEC_PALADIN_RETRIBUTION     = 70,
-    TALENT_SPEC_WARRIOR_ARMS            = 71,
-    TALENT_SPEC_WARRIOR_FURY            = 72,
-    TALENT_SPEC_WARRIOR_PROTECTION      = 73,
-    TALENT_SPEC_DRUID_BALANCE           = 102,
-    TALENT_SPEC_DRUID_CAT               = 103,
-    TALENT_SPEC_DRUID_BEAR              = 104,
-    TALENT_SPEC_DRUID_RESTORATION       = 105,
-    TALENT_SPEC_DEATHKNIGHT_BLOOD       = 250,
-    TALENT_SPEC_DEATHKNIGHT_FROST       = 251,
-    TALENT_SPEC_DEATHKNIGHT_UNHOLY      = 252,
-    TALENT_SPEC_HUNTER_BEASTMASTER      = 253,
-    TALENT_SPEC_HUNTER_MARKSMAN         = 254,
-    TALENT_SPEC_HUNTER_SURVIVAL         = 255,
-    TALENT_SPEC_PRIEST_DISCIPLINE       = 256,
-    TALENT_SPEC_PRIEST_HOLY             = 257,
-    TALENT_SPEC_PRIEST_SHADOW           = 258,
-    TALENT_SPEC_ROGUE_ASSASSINATION     = 259,
-    TALENT_SPEC_ROGUE_COMBAT            = 260,
-    TALENT_SPEC_ROGUE_SUBTLETY          = 261,
-    TALENT_SPEC_SHAMAN_ELEMENTAL        = 262,
-    TALENT_SPEC_SHAMAN_ENHANCEMENT      = 263,
-    TALENT_SPEC_SHAMAN_RESTORATION      = 264,
-    TALENT_SPEC_WARLOCK_AFFLICTION      = 265,
-    TALENT_SPEC_WARLOCK_DEMONOLOGY      = 266,
-    TALENT_SPEC_WARLOCK_DESTRUCTION     = 267,
-    TALENT_SPEC_MONK_BREWMASTER         = 268,
-    TALENT_SPEC_MONK_BATTLEDANCER       = 269,
-    TALENT_SPEC_MONK_MISTWEAVER         = 270,
-    TALENT_SPEC_DEMON_HUNTER_HAVOC      = 577,
-    TALENT_SPEC_DEMON_HUNTER_VENGEANCE  = 581
-};
-
 enum SpecResetType
 {
     SPEC_RESET_TALENTS = 0,
@@ -256,6 +220,7 @@ enum SpecResetType
 struct SpellModifier
 {
     SpellModifier(Aura* _ownerAura) : op(SpellModOp::HealingAndDamage), type(SPELLMOD_FLAT), spellId(0), ownerAura(_ownerAura) { }
+    virtual ~SpellModifier() = default;
 
     SpellModOp op;
     SpellModType type;
@@ -1027,7 +992,7 @@ class Player;
 struct BGData
 {
     BGData() : bgInstanceID(0), bgTypeID(BATTLEGROUND_TYPE_NONE), bgAfkReportedCount(0), bgAfkReportedTimer(0),
-        bgTeam(0), mountSpell(0) { ClearTaxiPath(); }
+        bgTeam(0), mountSpell(0), queueId(BATTLEGROUND_QUEUE_NONE) { ClearTaxiPath(); }
 
     uint32 bgInstanceID;                    ///< This variable is set to bg->m_InstanceID,
                                             ///  when player is teleported to BG - (it is battleground's GUID)
@@ -1043,6 +1008,7 @@ struct BGData
     uint32 taxiPath[2];
 
     WorldLocation joinPos;                  ///< From where player entered BG
+    BattlegroundQueueTypeId queueId;
 
     void ClearTaxiPath()     { taxiPath[0] = taxiPath[1] = 0; }
     bool HasTaxiPath() const { return taxiPath[0] && taxiPath[1]; }
@@ -1815,7 +1781,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void SendRemoveControlBar() const;
         bool HasSpell(uint32 spell) const override;
         bool HasActiveSpell(uint32 spell) const;            // show in spellbook
-        SpellInfo const* GetCastSpellInfo(SpellInfo const* spellInfo) const override;
+        SpellInfo const* GetCastSpellInfo(SpellInfo const* spellInfo, TriggerCastFlags& triggerFlag) const override;
         bool IsSpellFitByClassAndRace(uint32 spell_id) const;
         bool HandlePassiveSpellLearn(SpellInfo const* spellInfo);
 
@@ -1862,11 +1828,12 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void SetTalentResetCost(uint32 cost)  { _specializationInfo.ResetTalentsCost = cost; }
         time_t GetTalentResetTime() const { return _specializationInfo.ResetTalentsTime; }
         void SetTalentResetTime(time_t time_)  { _specializationInfo.ResetTalentsTime = time_; }
-        uint32 GetPrimarySpecialization() const { return m_playerData->CurrentSpecID; }
+        ChrSpecialization GetPrimarySpecialization() const { return ChrSpecialization(*m_playerData->CurrentSpecID); }
         void SetPrimarySpecialization(uint32 spec) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::CurrentSpecID), spec); }
         uint8 GetActiveTalentGroup() const { return _specializationInfo.ActiveGroup; }
         void SetActiveTalentGroup(uint8 group){ _specializationInfo.ActiveGroup = group; }
         uint32 GetDefaultSpecId() const;
+        ChrSpecializationEntry const* GetPrimarySpecializationEntry() const;
 
         bool ResetTalents(bool noCost = false);
         void ResetPvpTalents();
@@ -2018,6 +1985,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         Guild const* GetGuild() const;
         ObjectGuid::LowType GetGuildIdInvited() const { return m_GuildIdInvited; }
         static void RemovePetitionsAndSigns(ObjectGuid guid);
+        void SetPersonalTabard(uint32 style, uint32 color, uint32 borderStyle, uint32 borderColor, uint32 backgroundColor);
 
         // Arena Team
         void SetInArenaTeam(uint32 ArenaTeamId, uint8 slot, uint8 type);
@@ -2429,7 +2397,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool IsInvitedForBattlegroundQueueType(BattlegroundQueueTypeId bgQueueTypeId) const;
         bool InBattlegroundQueueForBattlegroundQueueType(BattlegroundQueueTypeId bgQueueTypeId) const;
 
-        void SetBattlegroundId(uint32 val, BattlegroundTypeId bgTypeId);
+        void SetBattlegroundId(uint32 val, BattlegroundTypeId bgTypeId, BattlegroundQueueTypeId queueId);
         uint32 AddBattlegroundQueueId(BattlegroundQueueTypeId val);
         bool HasFreeBattlegroundQueueId() const;
         void RemoveBattlegroundQueueId(BattlegroundQueueTypeId val);
@@ -2444,7 +2412,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         uint32 GetBGTeam() const;
 
         void LeaveBattleground(bool teleportToEntryPoint = true);
-        bool CanJoinToBattleground(Battleground const* bg) const;
+        bool CanJoinToBattleground(BattlegroundTemplate const* bg) const;
         bool CanReportAfkDueToLimit();
         void ReportedAfkBy(Player* reporter);
         void ClearAfkReports() { m_bgData.bgAfkReporter.clear(); }
@@ -2565,6 +2533,9 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         // Temporarily removed pet cache
         uint32 GetTemporaryUnsummonedPetNumber() const { return m_temporaryUnsummonedPetNumber; }
         void SetTemporaryUnsummonedPetNumber(uint32 petnumber) { m_temporaryUnsummonedPetNumber = petnumber; }
+        Optional<ReactStates> GetTemporaryPetReactState() const { return m_temporaryPetReactState; }
+        void DisablePetControlsOnMount(ReactStates reactState, CommandStates commandState);
+        void EnablePetControlsOnDismount();
         void UnsummonPetTemporaryIfAny();
         void ResummonPetTemporaryUnSummonedIfAny();
         bool IsPetNeedBeTemporaryUnsummoned() const;
@@ -2608,6 +2579,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool CheckInstanceValidity(bool /*isLogin*/);
         bool CheckInstanceCount(uint32 instanceId) const;
         void AddInstanceEnterTime(uint32 instanceId, time_t enterTime);
+        WorldSafeLocsEntry const* GetInstanceEntrance(uint32 targetMapId);
 
         // last used pet number (for BG's)
         uint32 GetLastPetNumber() const { return m_lastpetnumber; }
@@ -2620,6 +2592,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool IsInGroup(ObjectGuid groupGuid) const;
         Group* GetGroupInvite() const { return m_groupInvite; }
         void SetGroupInvite(Group* group) { m_groupInvite = group; }
+        Group* GetGroup(Optional<uint8> partyIndex) { return const_cast<Group*>(const_cast<Player const*>(this)->GetGroup(partyIndex)); }
+        Group const* GetGroup(Optional<uint8> partyIndex) const;
         Group* GetGroup() { return m_group.getTarget(); }
         Group const* GetGroup() const { return const_cast<Group const*>(m_group.getTarget()); }
         GroupReference& GetGroupRef() { return m_group; }
@@ -2632,7 +2606,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void ResetGroupUpdateSequenceIfNeeded(Group const* group);
         int32 NextGroupUpdateSequenceNumber(GroupCategory category);
         Player* GetNextRandomRaidMember(float radius);
-        PartyResult CanUninviteFromGroup(ObjectGuid guidMember = ObjectGuid::Empty) const;
+        PartyResult CanUninviteFromGroup(ObjectGuid guidMember, Optional<uint8> partyIndex) const;
 
         // Battleground / Battlefield Group System
         void SetBattlegroundOrBattlefieldRaid(Group* group, int8 subgroup = -1);
@@ -2653,7 +2627,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         bool isAllowedToLoot(Creature const* creature) const;
 
-        DeclinedName const* GetDeclinedNames() const { return m_declinedname.get(); }
+        UF::DeclinedNames const* GetDeclinedNames() const { return m_playerData->DeclinedNames.has_value() ? &*m_playerData->DeclinedNames : nullptr; }
         uint8 GetRunesState() const;
         uint32 GetRuneCooldown(uint8 index) const { return m_runes->Cooldown[index]; }
         uint32 GetRuneBaseCooldown() const;
@@ -2666,10 +2640,9 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         std::vector<uint32> GetCompletedAchievementIds() const;
         bool HasAchieved(uint32 achievementId) const;
         void ResetAchievements();
-        void ResetCriteria(CriteriaFailEvent condition, int32 failAsset, bool evenIfCriteriaComplete = false);
+        void FailCriteria(CriteriaFailEvent condition, int32 failAsset);
         void UpdateCriteria(CriteriaType type, uint64 miscValue1 = 0, uint64 miscValue2 = 0, uint64 miscValue3 = 0, WorldObject* ref = nullptr);
-        void StartCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry, uint32 timeLost = 0);
-        void RemoveCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry);
+        void StartCriteria(CriteriaStartEvent startEvent, uint32 entry, Milliseconds timeLost = Milliseconds::zero());
         void CompletedAchievement(AchievementEntry const* entry);
         bool ModifierTreeSatisfied(uint32 modifierTreeId) const;
 
@@ -3139,7 +3112,6 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         WorldLocation m_recall_location;
         uint32 m_recall_instanceId;
 
-        std::unique_ptr<DeclinedName> m_declinedname;
         std::unique_ptr<Runes> m_runes;
         EquipmentSetContainer _equipmentSets;
 
@@ -3203,6 +3175,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         // Temporary removed pet cache
         uint32 m_temporaryUnsummonedPetNumber;
+        Optional<ReactStates> m_temporaryPetReactState;
         uint32 m_oldpetspell;
 
         std::unique_ptr<PlayerAchievementMgr> m_achievementMgr;

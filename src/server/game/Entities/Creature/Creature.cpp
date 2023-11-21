@@ -643,7 +643,15 @@ bool Creature::UpdateEntry(uint32 entry, CreatureData const* data /*= nullptr*/,
 
     // checked and error show at loading templates
     if (FactionTemplateEntry const* factionTemplate = sFactionTemplateStore.LookupEntry(cInfo->faction))
+    {
         SetPvP((factionTemplate->Flags & FACTION_TEMPLATE_FLAG_PVP) != 0);
+        if (IsTaxi())
+        {
+            uint32 taxiNodesId = sObjectMgr->GetNearestTaxiNode(GetPositionX(), GetPositionY(), GetPositionZ(), GetMapId(),
+                factionTemplate->FactionGroup & FACTION_MASK_ALLIANCE ? ALLIANCE : HORDE);
+            SetUpdateFieldValue(m_values.ModifyValue(&Unit::m_unitData).ModifyValue(&UF::UnitData::TaxiNodesID), taxiNodesId);
+        }
+    }
 
     // updates spell bars for vehicles and set player's faction - should be called here, to overwrite faction that is set from the new template
     if (IsVehicle())
@@ -657,7 +665,7 @@ bool Creature::UpdateEntry(uint32 entry, CreatureData const* data /*= nullptr*/,
 
     // trigger creature is always uninteractible and can not be attacked
     if (IsTrigger())
-        SetUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
+        SetUninteractible(true);
 
     InitializeReactState();
 
@@ -1421,10 +1429,11 @@ void Creature::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiffic
     CreatureData& data = sObjectMgr->NewOrExistCreatureData(m_spawnId);
 
     uint32 displayId = GetNativeDisplayId();
-    uint64 npcflag = (uint64(m_unitData->NpcFlags[1]) << 32) | m_unitData->NpcFlags[0];
-    uint32 unitFlags = m_unitData->Flags;
-    uint32 unitFlags2 = m_unitData->Flags2;
-    uint32 unitFlags3 = m_unitData->Flags3;
+    uint64 spawnNpcFlags = (uint64(m_unitData->NpcFlags[1]) << 32) | m_unitData->NpcFlags[0];
+    Optional<uint64> npcflag;
+    Optional<uint32> unitFlags;
+    Optional<uint32> unitFlags2;
+    Optional<uint32> unitFlags3;
 
     // check if it's a custom model and if not, use 0 for displayId
     CreatureTemplate const* cinfo = GetCreatureTemplate();
@@ -1434,17 +1443,17 @@ void Creature::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiffic
             if (displayId && displayId == model.CreatureDisplayID)
                 displayId = 0;
 
-        if (npcflag == cinfo->npcflag)
-            npcflag = 0;
+        if (spawnNpcFlags != cinfo->npcflag)
+            npcflag = spawnNpcFlags;
 
-        if (unitFlags == cinfo->unit_flags)
-            unitFlags = 0;
+        if (m_unitData->Flags != cinfo->unit_flags)
+            unitFlags = m_unitData->Flags;
 
-        if (unitFlags2 == cinfo->unit_flags2)
-            unitFlags2 = 0;
+        if (m_unitData->Flags2 != cinfo->unit_flags2)
+            unitFlags2 = m_unitData->Flags2;
 
-        if (unitFlags3 == cinfo->unit_flags3)
-            unitFlags3 = 0;
+        if (m_unitData->Flags3 != cinfo->unit_flags3)
+            unitFlags3 = m_unitData->Flags3;
     }
 
     if (!data.spawnId)
@@ -1524,10 +1533,25 @@ void Creature::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiffic
     stmt->setUInt32(index++, GetHealth());
     stmt->setUInt32(index++, GetPower(POWER_MANA));
     stmt->setUInt8(index++, uint8(GetDefaultMovementType()));
-    stmt->setUInt64(index++, npcflag);
-    stmt->setUInt32(index++, unitFlags);
-    stmt->setUInt32(index++, unitFlags2);
-    stmt->setUInt32(index++, unitFlags3);
+    if (npcflag.has_value())
+        stmt->setUInt64(index++, *npcflag);
+    else
+        stmt->setNull(index++);
+
+    if (unitFlags.has_value())
+        stmt->setUInt32(index++, *unitFlags);
+    else
+        stmt->setNull(index++);
+
+    if (unitFlags2.has_value())
+        stmt->setUInt32(index++, *unitFlags2);
+    else
+        stmt->setNull(index++);
+
+    if (unitFlags3.has_value())
+        stmt->setUInt32(index++, *unitFlags3);
+    else
+        stmt->setNull(index++);
     trans->Append(stmt);
 
     WorldDatabase.CommitTransaction(trans);
@@ -2549,7 +2573,7 @@ bool Creature::CanAssistTo(Unit const* u, Unit const* enemy, bool checkfaction /
     if (IsCivilian())
         return false;
 
-    if (HasUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_UNINTERACTIBLE) || IsImmuneToNPC())
+    if (HasUnitFlag(UNIT_FLAG_NON_ATTACKABLE) || IsImmuneToNPC() || IsUninteractible())
         return false;
 
     // skip fighting creature
@@ -3194,7 +3218,7 @@ float Creature::GetPetChaseDistance() const
 
         if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellID, GetMap()->GetDifficultyID()))
         {
-            if (spellInfo->GetRecoveryTime() == 0 && spellInfo->RangeEntry->ID != 1 /*Self*/ && spellInfo->RangeEntry->ID != 2 /*Combat Range*/ && spellInfo->GetMaxRange() > range)
+            if (spellInfo->GetRecoveryTime() == 0 && spellInfo->RangeEntry && spellInfo->RangeEntry->ID != 1 /*Self*/ && spellInfo->RangeEntry->ID != 2 /*Combat Range*/ && spellInfo->GetMaxRange() > range)
                 range = spellInfo->GetMaxRange();
         }
     }
@@ -3358,7 +3382,7 @@ void Creature::SetSpellFocus(Spell const* focusSpell, WorldObject const* target)
     _spellFocusInfo.Spell = focusSpell;
 
     bool const noTurnDuringCast = spellInfo->HasAttribute(SPELL_ATTR5_AI_DOESNT_FACE_TARGET);
-    bool const turnDisabled = HasUnitFlag2(UNIT_FLAG2_CANNOT_TURN);
+    bool const turnDisabled = CannotTurn();
     // set target, then force send update packet to players if it changed to provide appropriate facing
     ObjectGuid newTarget = (target && !noTurnDuringCast && !turnDisabled) ? target->GetGUID() : ObjectGuid::Empty;
     if (GetTarget() != newTarget)
@@ -3404,7 +3428,7 @@ void Creature::ReleaseSpellFocus(Spell const* focusSpell, bool withDelay)
 
     if (IsPet()) // player pets do not use delay system
     {
-        if (!HasUnitFlag2(UNIT_FLAG2_CANNOT_TURN))
+        if (!CannotTurn())
             ReacquireSpellFocusTarget();
     }
     else // don't allow re-target right away to prevent visual bugs
@@ -3423,7 +3447,7 @@ void Creature::ReacquireSpellFocusTarget()
 
     SetUpdateFieldValue(m_values.ModifyValue(&Unit::m_unitData).ModifyValue(&UF::UnitData::Target), _spellFocusInfo.Target);
 
-    if (!HasUnitFlag2(UNIT_FLAG2_CANNOT_TURN))
+    if (!CannotTurn())
     {
         if (!_spellFocusInfo.Target.IsEmpty())
         {

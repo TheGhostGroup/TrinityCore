@@ -431,6 +431,10 @@ void WorldSession::HandleChatMessage(ChatMsg type, Language lang, std::string ms
                 : ChannelMgr::GetChannelForPlayerByNamePart(target, sender);
             if (chn)
             {
+                if (ChatChannelsEntry const* chatChannel = sChatChannelsStore.LookupEntry(chn->GetChannelId()))
+                    if (chatChannel->GetFlags().HasFlag(ChatChannelFlags::ReadOnly))
+                        return;
+
                 sScriptMgr->OnPlayerChat(sender, type, lang, msg, chn);
                 chn->Say(sender->GetGUID(), msg, lang);
             }
@@ -775,4 +779,15 @@ void WorldSession::HandleChatCanLocalWhisperTargetRequest(WorldPackets::Chat::Ca
     canLocalWhisperTargetResponse.WhisperTarget = canLocalWhisperTargetRequest.WhisperTarget;
     canLocalWhisperTargetResponse.Status = status;
     SendPacket(canLocalWhisperTargetResponse.Write());
+}
+
+void WorldSession::HandleChatUpdateAADCStatus(WorldPackets::Chat::UpdateAADCStatus const& /*updateAADCStatus*/)
+{
+    // disabling chat not supported
+    // send Sueccess and force chat disabled to false instead of sending that change failed
+    // this makes client change the cvar back to false instead of just printing error message in console
+    WorldPackets::Chat::UpdateAADCStatusResponse response;
+    response.Success = true;
+    response.ChatDisabled = false;
+    SendPacket(response.Write());
 }

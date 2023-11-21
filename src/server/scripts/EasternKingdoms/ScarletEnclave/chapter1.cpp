@@ -23,6 +23,7 @@
 #include "GameObject.h"
 #include "GameObjectAI.h"
 #include "Log.h"
+#include "Map.h"
 #include "MotionMaster.h"
 #include "MoveSplineInit.h"
 #include "ObjectAccessor.h"
@@ -31,6 +32,7 @@
 #include "Player.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
+#include "SpellMgr.h"
 #include "SpellScript.h"
 #include "SpellInfo.h"
 #include "TemporarySummon.h"
@@ -355,8 +357,6 @@ class go_acherus_soul_prison : public GameObjectScript
 // 51519 - Death Knight Initiate Visual
 class spell_death_knight_initiate_visual : public SpellScript
 {
-    PrepareSpellScript(spell_death_knight_initiate_visual);
-
     void HandleScriptEffect(SpellEffIndex /* effIndex */)
     {
         Creature* target = GetHitCreature();
@@ -841,8 +841,6 @@ enum HorseSeats
 // 52265 - Repo
 class spell_stable_master_repo : public AuraScript
 {
-    PrepareAuraScript(spell_stable_master_repo);
-
     void AfterApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
         Creature* creature = GetTarget()->ToCreature();
@@ -865,8 +863,6 @@ class spell_stable_master_repo : public AuraScript
 // 52264 - Deliver Stolen Horse
 class spell_deliver_stolen_horse : public SpellScript
 {
-    PrepareSpellScript(spell_deliver_stolen_horse);
-
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
         return ValidateSpellInfo({ SPELL_DELIVER_STOLEN_HORSE, SPELL_EFFECT_STOLEN_HORSE });
@@ -922,7 +918,7 @@ public:
 
             deathcharger->RestoreFaction();
             deathcharger->RemoveNpcFlag(UNIT_NPC_FLAG_SPELLCLICK);
-            deathcharger->SetUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
+            deathcharger->SetUninteractible(true);
             if (!me->GetVehicle() && deathcharger->IsVehicle() && deathcharger->GetVehicleKit()->HasEmptySeat(0))
                 me->EnterVehicle(deathcharger);
         }
@@ -936,7 +932,7 @@ public:
             if (killer->GetTypeId() == TYPEID_PLAYER && deathcharger->GetTypeId() == TYPEID_UNIT && deathcharger->IsVehicle())
             {
                 deathcharger->SetNpcFlag(UNIT_NPC_FLAG_SPELLCLICK);
-                deathcharger->RemoveUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
+                deathcharger->SetUninteractible(false);
                 deathcharger->SetFaction(FACTION_SCARLET_CRUSADE_2);
             }
         }
@@ -1079,8 +1075,6 @@ enum GiftOfTheHarvester
 // 52479 - Gift of the Harvester
 class spell_gift_of_the_harvester : public SpellScript
 {
-    PrepareSpellScript(spell_gift_of_the_harvester);
-
     bool Validate(SpellInfo const* /*spell*/) override
     {
         return ValidateSpellInfo(
@@ -1125,8 +1119,6 @@ enum Runeforging
    327082 - Rune of the Apocalypse */
 class spell_chapter1_runeforging_credit : public SpellScript
 {
-    PrepareSpellScript(spell_chapter1_runeforging_credit);
-
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
         return ValidateSpellInfo({ SPELL_RUNEFORGING_CREDIT }) &&
@@ -1146,6 +1138,59 @@ class spell_chapter1_runeforging_credit : public SpellScript
     }
 };
 
+// 29102 - Hearthglen Crusader
+// 29103 - Tirisfal Crusader
+struct npc_hearthglen_crusader : public ScriptedAI
+{
+    npc_hearthglen_crusader(Creature* creature) : ScriptedAI(creature), _minimumRange(0)
+    {
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(creature->m_spells[0], creature->GetMap()->GetDifficultyID());
+        if (!spellInfo)
+            return;
+
+        _minimumRange = spellInfo->GetMinRange(false);
+
+        if (!_minimumRange)
+            _minimumRange = MELEE_RANGE;
+        creature->m_CombatDistance = spellInfo->GetMaxRange(false);
+        creature->m_SightDistance = creature->m_CombatDistance;
+    }
+
+    void AttackStart(Unit* who) override
+    {
+        if (!who)
+            return;
+
+        if (me->IsWithinCombatRange(who, _minimumRange))
+        {
+            if (me->Attack(who, true) && !who->IsFlying())
+                me->GetMotionMaster()->MoveChase(who);
+        }
+        else
+        {
+            if (me->Attack(who, false) && !who->IsFlying())
+                me->GetMotionMaster()->MoveChase(who, me->m_CombatDistance);
+        }
+
+        if (who->IsFlying())
+            me->GetMotionMaster()->MoveIdle();
+    }
+
+    void UpdateAI(uint32 /*diff*/) override
+    {
+        if (!UpdateVictim())
+            return;
+
+        if (!me->IsWithinCombatRange(me->GetVictim(), _minimumRange))
+            DoSpellAttackIfReady(me->m_spells[0]);
+        else
+            DoMeleeAttackIfReady();
+    }
+
+private:
+    float _minimumRange;
+};
+
 void AddSC_the_scarlet_enclave_c1()
 {
     new npc_unworthy_initiate();
@@ -1163,4 +1208,5 @@ void AddSC_the_scarlet_enclave_c1()
     RegisterCreatureAI(npc_scarlet_ghoul);
     RegisterSpellScript(spell_gift_of_the_harvester);
     RegisterSpellScript(spell_chapter1_runeforging_credit);
+    RegisterCreatureAI(npc_hearthglen_crusader);
 }

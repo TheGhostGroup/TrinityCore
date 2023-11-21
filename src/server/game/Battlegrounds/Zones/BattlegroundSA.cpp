@@ -428,10 +428,10 @@ void BattlegroundSA::PostUpdateImpl(uint32 diff)
     }
 }
 
-void BattlegroundSA::AddPlayer(Player* player)
+void BattlegroundSA::AddPlayer(Player* player, BattlegroundQueueTypeId queueId)
 {
     bool const isInBattleground = IsPlayerInBattleground(player->GetGUID());
-    Battleground::AddPlayer(player);
+    Battleground::AddPlayer(player, queueId);
     if (!isInBattleground)
         PlayerScores[player->GetGUID()] = new BattlegroundSAScore(player->GetGUID(), player->GetBGTeam());
 
@@ -631,9 +631,15 @@ void BattlegroundSA::DemolisherStartState(bool start)
         if (Creature* dem = GetBGCreature(i))
         {
             if (start)
-                dem->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_UNINTERACTIBLE);
+            {
+                dem->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+                dem->SetUninteractible(true);
+            }
             else
-                dem->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE | UNIT_FLAG_UNINTERACTIBLE);
+            {
+                dem->RemoveUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+                dem->SetUninteractible(false);
+            }
         }
     }
 }

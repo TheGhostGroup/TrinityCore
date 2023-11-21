@@ -38,6 +38,7 @@
 #include "GameTime.h"
 #include "GitRevision.h"
 #include "Group.h"
+#include "GroupMgr.h"
 #include "Guild.h"
 #include "GuildMgr.h"
 #include "Item.h"
@@ -402,10 +403,7 @@ void WorldSession::HandleCharEnum(CharacterDatabaseQueryHolder const& holder)
         do
         {
             Field* fields = customizationsResult->Fetch();
-            std::vector<UF::ChrCustomizationChoice>& customizationsForCharacter = customizations[fields[0].GetUInt64()];
-
-            customizationsForCharacter.emplace_back();
-            UF::ChrCustomizationChoice& choice = customizationsForCharacter.back();
+            UF::ChrCustomizationChoice& choice = customizations[fields[0].GetUInt64()].emplace_back();
             choice.ChrCustomizationOptionID = fields[1].GetUInt32();
             choice.ChrCustomizationChoiceID = fields[2].GetUInt32();
 
@@ -455,8 +453,6 @@ void WorldSession::HandleCharEnum(CharacterDatabaseQueryHolder const& holder)
         }
         while (result->NextRow() && charEnum.Characters.size() < MAX_CHARACTERS_PER_REALM);
     }
-
-    charEnum.IsAlliedRacesCreationAllowed = CanAccessAlliedRaces();
 
     for (std::pair<uint8 const, RaceUnlockRequirement> const& requirement : sObjectMgr->GetRaceUnlockRequirements())
     {
@@ -1165,9 +1161,8 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder const& holder)
 
     // Send MOTD
     {
-        WorldPackets::System::MOTD motd;
-        motd.Text = &sWorld->GetMotd();
-        SendPacket(motd.Write());
+        for (std::string const& motdLine : sWorld->GetMotd())
+            sWorld->SendServerMessage(SERVER_MSG_STRING, motdLine, pCurrChar);
     }
 
     SendSetTimeZoneInformation();
@@ -1451,6 +1446,8 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder const& holder)
     pCurrChar->UpdateAverageItemLevelEquipped();
 
     m_playerLoading.Clear();
+
+    _player->UpdateMountCapability();
 
     // Handle Login-Achievements (should be handled after loading)
     _player->UpdateCriteria(CriteriaType::Login, 1);
@@ -2120,6 +2117,7 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
     Field* fields              = result->Fetch();
     uint16 atLoginFlags        = fields[0].GetUInt16();
     std::string knownTitlesStr = fields[1].GetString();
+    uint32 groupId             = !fields[2].IsNull() ? fields[2].GetUInt32() : 0;
 
     uint16 usedLoginFlag = (factionChangeInfo->FactionChange ? AT_LOGIN_CHANGE_FACTION : AT_LOGIN_CHANGE_RACE);
     if (!(atLoginFlags & usedLoginFlag))
@@ -2346,6 +2344,12 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
                     guild->DeleteMember(trans, factionChangeInfo->Guid, false, false, true);
 
                 Player::LeaveAllArenaTeams(factionChangeInfo->Guid);
+            }
+
+            if (groupId && !sWorld->getBoolConfig(CONFIG_ALLOW_TWO_SIDE_INTERACTION_GROUP))
+            {
+                if (Group* group = sGroupMgr->GetGroupByDbStoreId(groupId))
+                    group->RemoveMember(factionChangeInfo->Guid);
             }
 
             if (!HasPermission(rbac::RBAC_PERM_TWO_SIDE_ADD_FRIEND))
@@ -2785,6 +2789,29 @@ void WorldSession::HandleCharUndeleteOpcode(WorldPackets::Character::UndeleteCha
 
         SendUndeleteCharacterResponse(CHARACTER_UNDELETE_RESULT_OK, undeleteInfo.get());
     }));
+}
+
+void WorldSession::HandleSavePersonalEmblem(WorldPackets::Character::SavePersonalEmblem const& savePersonalEmblem)
+{
+    if (!_player->GetNPCIfCanInteractWith(savePersonalEmblem.Vendor, UNIT_NPC_FLAG_NONE, UNIT_NPC_FLAG_2_PERSONAL_TABARD_DESIGNER))
+    {
+        SendPacket(WorldPackets::Character::PlayerSavePersonalEmblem(ERR_GUILDEMBLEM_INVALIDVENDOR).Write());
+        return;
+    }
+
+    if (!EmblemInfo::ValidateEmblemColors(savePersonalEmblem.PersonalTabard.EmblemStyle, savePersonalEmblem.PersonalTabard.EmblemColor,
+        savePersonalEmblem.PersonalTabard.BorderStyle, savePersonalEmblem.PersonalTabard.BorderColor,
+        savePersonalEmblem.PersonalTabard.BackgroundColor))
+    {
+        SendPacket(WorldPackets::Character::PlayerSavePersonalEmblem(ERR_GUILDEMBLEM_INVALID_TABARD_COLORS).Write());
+        return;
+    }
+
+    _player->SetPersonalTabard(savePersonalEmblem.PersonalTabard.EmblemStyle, savePersonalEmblem.PersonalTabard.EmblemColor,
+        savePersonalEmblem.PersonalTabard.BorderStyle, savePersonalEmblem.PersonalTabard.BorderColor,
+        savePersonalEmblem.PersonalTabard.BackgroundColor);
+
+    SendPacket(WorldPackets::Character::PlayerSavePersonalEmblem(ERR_GUILDEMBLEM_SUCCESS).Write());
 }
 
 void WorldSession::SendCharCreate(ResponseCodes result, ObjectGuid const& guid /*= ObjectGuid::Empty*/)

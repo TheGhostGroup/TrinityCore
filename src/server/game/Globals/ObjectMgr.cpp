@@ -24,6 +24,7 @@
 #include "Chat.h"
 #include "Containers.h"
 #include "CreatureAIFactory.h"
+#include "CriteriaHandler.h"
 #include "DatabaseEnv.h"
 #include "DB2Stores.h"
 #include "DisableMgr.h"
@@ -53,6 +54,7 @@
 #include "QueryPackets.h"
 #include "QuestDef.h"
 #include "Random.h"
+#include "Realm.h"
 #include "ReputationMgr.h"
 #include "ScriptMgr.h"
 #include "ScriptReloadMgr.h"
@@ -905,7 +907,7 @@ void ObjectMgr::LoadCreatureTemplateSparring()
 
         if (noNPCDamageBelowHealthPct <= 0 || noNPCDamageBelowHealthPct > 100)
         {
-            TC_LOG_ERROR("sql.sql", "Creature (Entry: {}) has invalid NoNPCDamageBelowHealthPct (%f) defined in `creature_template_sparring`. Skipping",
+            TC_LOG_ERROR("sql.sql", "Creature (Entry: {}) has invalid NoNPCDamageBelowHealthPct ({}) defined in `creature_template_sparring`. Skipping",
                 entry, noNPCDamageBelowHealthPct);
             continue;
         }
@@ -1139,7 +1141,7 @@ void ObjectMgr::CheckCreatureTemplate(CreatureTemplate const* cInfo)
 
     if (uint32 disallowedUnitFlags3 = (cInfo->unit_flags3 & ~UNIT_FLAG3_ALLOWED))
     {
-        TC_LOG_ERROR("sql.sql", "Table `creature_template` lists creature (Entry: {}) with disallowed `unit_flags2` {}, removing incorrect flag.", cInfo->Entry, disallowedUnitFlags3);
+        TC_LOG_ERROR("sql.sql", "Table `creature_template` lists creature (Entry: {}) with disallowed `unit_flags3` {}, removing incorrect flag.", cInfo->Entry, disallowedUnitFlags3);
         const_cast<CreatureTemplate*>(cInfo)->unit_flags3 &= UNIT_FLAG3_ALLOWED;
     }
 
@@ -1642,7 +1644,7 @@ CreatureModel const* ObjectMgr::ChooseDisplayId(CreatureTemplate const* cinfo, C
 
 void ObjectMgr::ChooseCreatureFlags(CreatureTemplate const* cInfo, uint64* npcFlags, uint32* unitFlags, uint32* unitFlags2, uint32* unitFlags3, CreatureData const* data /*= nullptr*/)
 {
-#define ChooseCreatureFlagSource(field) ((data && data->field) ? data->field : cInfo->field)
+#define ChooseCreatureFlagSource(field) ((data && data->field.has_value()) ? *data->field : cInfo->field)
 
     if (npcFlags)
         *npcFlags = ChooseCreatureFlagSource(npcflag);
@@ -2083,7 +2085,7 @@ void ObjectMgr::LoadTempSummons()
             continue;
         }
 
-        data.time                       = fields[9].GetUInt32();
+        data.time                       = Milliseconds(fields[9].GetUInt32());
 
         TempSummonGroupKey key(summonerId, summonerType, group);
         _tempSummonDataStore[key].push_back(data);
@@ -2095,7 +2097,7 @@ void ObjectMgr::LoadTempSummons()
     TC_LOG_INFO("server.loading", ">> Loaded {} temp summons in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
 }
 
-inline std::vector<Difficulty> ParseSpawnDifficulties(std::string_view difficultyString, std::string_view table, ObjectGuid::LowType spawnId, uint32 mapId,
+std::vector<Difficulty> ObjectMgr::ParseSpawnDifficulties(std::string_view difficultyString, std::string_view table, ObjectGuid::LowType spawnId, uint32 mapId,
     std::set<Difficulty> const& mapDifficulties)
 {
     std::vector<Difficulty> difficulties;
@@ -2183,10 +2185,14 @@ void ObjectMgr::LoadCreatures()
         data.spawnDifficulties = ParseSpawnDifficulties(fields[15].GetStringView(), "creature", guid, data.mapId, spawnMasks[data.mapId]);
         int16 gameEvent     = fields[16].GetInt8();
         data.poolId         = fields[17].GetUInt32();
-        data.npcflag        = fields[18].GetUInt64();
-        data.unit_flags     = fields[19].GetUInt32();
-        data.unit_flags2    = fields[20].GetUInt32();
-        data.unit_flags3    = fields[21].GetUInt32();
+        if (!fields[18].IsNull())
+            data.npcflag = fields[18].GetUInt64();
+        if (!fields[19].IsNull())
+            data.unit_flags = fields[19].GetUInt32();
+        if (!fields[20].IsNull())
+            data.unit_flags2 = fields[20].GetUInt32();
+        if (!fields[21].IsNull())
+            data.unit_flags3 = fields[21].GetUInt32();
         data.phaseUseFlags  = fields[22].GetUInt8();
         data.phaseId        = fields[23].GetUInt32();
         data.phaseGroup     = fields[24].GetUInt32();
@@ -2322,22 +2328,31 @@ void ObjectMgr::LoadCreatures()
             }
         }
 
-        if (uint32 disallowedUnitFlags = (data.unit_flags & ~UNIT_FLAG_ALLOWED))
+        if (data.unit_flags.has_value())
         {
-            TC_LOG_ERROR("sql.sql", "Table `creature` has creature (GUID: {} Entry: {}) with disallowed `unit_flags` {}, removing incorrect flag.", guid, data.id, disallowedUnitFlags);
-            data.unit_flags &= UNIT_FLAG_ALLOWED;
+            if (uint32 disallowedUnitFlags = (*data.unit_flags & ~UNIT_FLAG_ALLOWED))
+            {
+                TC_LOG_ERROR("sql.sql", "Table `creature` has creature (GUID: {} Entry: {}) with disallowed `unit_flags` {}, removing incorrect flag.", guid, data.id, disallowedUnitFlags);
+                *data.unit_flags &= UNIT_FLAG_ALLOWED;
+            }
         }
 
-        if (uint32 disallowedUnitFlags2 = (data.unit_flags2 & ~UNIT_FLAG2_ALLOWED))
+        if (data.unit_flags2.has_value())
         {
-            TC_LOG_ERROR("sql.sql", "Table `creature` has creature (GUID: {} Entry: {}) with disallowed `unit_flags2` {}, removing incorrect flag.", guid, data.id, disallowedUnitFlags2);
-            data.unit_flags2 &= UNIT_FLAG2_ALLOWED;
+            if (uint32 disallowedUnitFlags2 = (*data.unit_flags2 & ~UNIT_FLAG2_ALLOWED))
+            {
+                TC_LOG_ERROR("sql.sql", "Table `creature` has creature (GUID: {} Entry: {}) with disallowed `unit_flags2` {}, removing incorrect flag.", guid, data.id, disallowedUnitFlags2);
+                *data.unit_flags2 &= UNIT_FLAG2_ALLOWED;
+            }
         }
 
-        if (uint32 disallowedUnitFlags3 = (data.unit_flags3 & ~UNIT_FLAG3_ALLOWED))
+        if (data.unit_flags3.has_value())
         {
-            TC_LOG_ERROR("sql.sql", "Table `creature` has creature (GUID: {} Entry: {}) with disallowed `unit_flags2` {}, removing incorrect flag.", guid, data.id, disallowedUnitFlags3);
-            data.unit_flags3 &= UNIT_FLAG3_ALLOWED;
+            if (uint32 disallowedUnitFlags3 = (*data.unit_flags3 & ~UNIT_FLAG3_ALLOWED))
+            {
+                TC_LOG_ERROR("sql.sql", "Table `creature` has creature (GUID: {} Entry: {}) with disallowed `unit_flags3` {}, removing incorrect flag.", guid, data.id, disallowedUnitFlags3);
+                *data.unit_flags3 &= UNIT_FLAG3_ALLOWED;
+            }
         }
 
         if (sWorld->getBoolConfig(CONFIG_CALCULATE_CREATURE_ZONE_AREA_DATA))
@@ -2363,6 +2378,19 @@ void ObjectMgr::LoadCreatures()
     while (result->NextRow());
 
     TC_LOG_INFO("server.loading", ">> Loaded {} creatures in {} ms", _creatureDataStore.size(), GetMSTimeDiffToNow(oldMSTime));
+}
+
+CellObjectGuids const* ObjectMgr::GetCellObjectGuids(uint32 mapid, Difficulty spawnMode, uint32 cell_id)
+{
+    if (CellObjectGuidsMap const* mapGuids = Trinity::Containers::MapGetValuePtr(_mapObjectGuidsStore, { mapid, spawnMode }))
+        return Trinity::Containers::MapGetValuePtr(*mapGuids, cell_id);
+
+    return nullptr;
+}
+
+CellObjectGuidsMap const* ObjectMgr::GetMapObjectGuids(uint32 mapid, Difficulty spawnMode)
+{
+    return Trinity::Containers::MapGetValuePtr(_mapObjectGuidsStore, { mapid, spawnMode });
 }
 
 bool ObjectMgr::HasPersonalSpawns(uint32 mapid, Difficulty spawnMode, uint32 phaseId) const
@@ -2430,8 +2458,8 @@ void ObjectMgr::LoadGameObjects()
     QueryResult result = WorldDatabase.Query("SELECT gameobject.guid, id, map, position_x, position_y, position_z, orientation, "
     //   7          8          9          10         11             12            13     14                 15          16
         "rotation0, rotation1, rotation2, rotation3, spawntimesecs, animprogress, state, spawnDifficulties, eventEntry, poolSpawnId, "
-    //   17             18       19          20              21
-        "phaseUseFlags, phaseid, phasegroup, terrainSwapMap, ScriptName "
+    //   17             18       19          20              21          22
+        "phaseUseFlags, phaseid, phasegroup, terrainSwapMap, ScriptName, StringId "
         "FROM gameobject LEFT OUTER JOIN game_event_gameobject ON gameobject.guid = game_event_gameobject.guid "
         "LEFT OUTER JOIN pool_members ON pool_members.type = 1 AND gameobject.guid = pool_members.spawnId");
 
@@ -2607,6 +2635,7 @@ void ObjectMgr::LoadGameObjects()
         }
 
         data.scriptId = GetScriptId(fields[21].GetString());
+        data.StringId = fields[22].GetString();
 
         if (data.rotation.x < -1.0f || data.rotation.x > 1.0f)
         {
@@ -3948,9 +3977,9 @@ void ObjectMgr::LoadPlayerInfo()
         for (SkillRaceClassInfoEntry const* rcInfo : sSkillRaceClassInfoStore)
             if (rcInfo->Availability == 1)
                 for (uint32 raceIndex = RACE_HUMAN; raceIndex < MAX_RACES; ++raceIndex)
-                    if (rcInfo->RaceMask.HasRace(raceIndex))
+                    if (rcInfo->RaceMask.IsEmpty() || rcInfo->RaceMask.HasRace(raceIndex))
                         for (uint32 classIndex = CLASS_WARRIOR; classIndex < MAX_CLASSES; ++classIndex)
-                            if (rcInfo->ClassMask == -1 || ((1 << (classIndex - 1)) & rcInfo->ClassMask))
+                            if (rcInfo->ClassMask == -1 || rcInfo->ClassMask == 0 || ((1 << (classIndex - 1)) & rcInfo->ClassMask))
                                 if (auto const& playerInfo = Trinity::Containers::MapGetValuePtr(_playerInfo, { Races(raceIndex), Classes(classIndex) }))
                                     playerInfo->get()->skills.push_back(rcInfo);
 
@@ -5838,31 +5867,53 @@ void ObjectMgr::LoadEventSet()
 
     // Load all possible event ids from gameobjects
     for (auto const& gameObjectTemplatePair : _gameObjectTemplateStore)
-        if (uint32 eventId = gameObjectTemplatePair.second.GetEventScriptId())
-            _eventStore.insert(eventId);
+    {
+        EventContainer eventSet = gameObjectTemplatePair.second.GetEventScriptSet();
+        _eventStore.insert(eventSet.begin(), eventSet.end());
+    }
 
     // Load all possible event ids from spells
-    for (SpellNameEntry const* spellNameEntry : sSpellNameStore)
-        if (SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellNameEntry->ID, DIFFICULTY_NONE))
-            for (SpellEffectInfo const& spellEffectInfo : spell->GetEffects())
-                if (spellEffectInfo.IsEffect(SPELL_EFFECT_SEND_EVENT))
-                    if (spellEffectInfo.MiscValue)
-                        _eventStore.insert(spellEffectInfo.MiscValue);
+    for (SpellEffectEntry const* spellEffect : sSpellEffectStore)
+        if (spellEffect->Effect == SPELL_EFFECT_SEND_EVENT && spellEffect->EffectMiscValue[0])
+            _eventStore.insert(spellEffect->EffectMiscValue[0]);
 
     // Load all possible event ids from taxi path nodes
-    for (size_t path_idx = 0; path_idx < sTaxiPathNodesByPath.size(); ++path_idx)
+    for (TaxiPathNodeEntry const* node : sTaxiPathNodeStore)
     {
-        for (size_t node_idx = 0; node_idx < sTaxiPathNodesByPath[path_idx].size(); ++node_idx)
-        {
-            TaxiPathNodeEntry const* node = sTaxiPathNodesByPath[path_idx][node_idx];
+        if (node->ArrivalEventID)
+            _eventStore.insert(node->ArrivalEventID);
 
-            if (node->ArrivalEventID)
-                _eventStore.insert(node->ArrivalEventID);
-
-            if (node->DepartureEventID)
-                _eventStore.insert(node->DepartureEventID);
-        }
+        if (node->DepartureEventID)
+            _eventStore.insert(node->DepartureEventID);
     }
+
+    // Load all possible event ids from criterias
+    auto addCriteriaEventsToStore = [&](CriteriaList const& criteriaList)
+    {
+        for (Criteria const* criteria : criteriaList)
+            if (criteria->Entry->Asset.EventID)
+                _eventStore.insert(criteria->Entry->Asset.EventID);
+    };
+
+    std::array<CriteriaType, 2> eventCriteriaTypes = { CriteriaType::PlayerTriggerGameEvent, CriteriaType::AnyoneTriggerGameEventScenario };
+    for (CriteriaType criteriaType : eventCriteriaTypes)
+    {
+        addCriteriaEventsToStore(sCriteriaMgr->GetPlayerCriteriaByType(criteriaType, 0));
+        addCriteriaEventsToStore(sCriteriaMgr->GetGuildCriteriaByType(criteriaType));
+        addCriteriaEventsToStore(sCriteriaMgr->GetQuestObjectiveCriteriaByType(criteriaType));
+    }
+
+    for (ScenarioEntry const* scenario : sScenarioStore)
+        for (CriteriaType criteriaType : eventCriteriaTypes)
+            addCriteriaEventsToStore(sCriteriaMgr->GetScenarioCriteriaByTypeAndScenario(criteriaType, scenario->ID));
+
+    for (auto const& [gameEventId, _] : sCriteriaMgr->GetCriteriaByStartEvent(CriteriaStartEvent::SendEvent))
+        if (gameEventId)
+            _eventStore.insert(gameEventId);
+
+    for (auto const& [gameEventId, _] : sCriteriaMgr->GetCriteriaByFailEvent(CriteriaFailEvent::SendEvent))
+        if (gameEventId)
+            _eventStore.insert(gameEventId);
 }
 
 void ObjectMgr::LoadEventScripts()
@@ -5877,7 +5928,7 @@ void ObjectMgr::LoadEventScripts()
     for (ScriptMapMap::const_iterator itr = sEventScripts.begin(); itr != sEventScripts.end(); ++itr)
     {
         if (!IsValidEvent(itr->first))
-            TC_LOG_ERROR("sql.sql", "Table `event_scripts` has script (Id: {}) not referring to any gameobject_template (type 3 data6 field, type 7 data3 field, type 10 data2 field, type 13 data2 field, type 50 data7 field), any taxi path node or any spell effect {}",
+            TC_LOG_ERROR("sql.sql", "Table `event_scripts` has script (Id: {}) not referring to any gameobject_template (data field referencing GameEvent), any taxi path node, any criteria asset or any spell effect {}",
                 itr->first, SPELL_EFFECT_SEND_EVENT);
     }
 
@@ -5901,7 +5952,7 @@ void ObjectMgr::LoadEventScripts()
 
         if (!IsValidEvent(eventId))
         {
-            TC_LOG_ERROR("sql.sql", "Event (ID: {}) not referring to any gameobject_template (type 3 data6 field, type 7 data3 field, type 10 data2 field, type 13 data2 field, type 50 data7 field), any taxi path node or any spell effect {}",
+            TC_LOG_ERROR("sql.sql", "Event (ID: {}) not referring to any gameobject_template (data field referencing GameEvent), any taxi path node, any criteria asset or any spell effect {}",
                 eventId, SPELL_EFFECT_SEND_EVENT);
             continue;
         }
@@ -6042,7 +6093,7 @@ void ObjectMgr::ValidateSpellScripts()
 
             if (spellScript)
             {
-                spellScript->_Init(&spellScriptLoader->GetName(), spellEntry->Id);
+                spellScript->_Init(spellScriptLoader->GetName(), spellEntry->Id);
                 spellScript->_Register();
 
                 if (!spellScript->_Validate(spellEntry))
@@ -6054,7 +6105,7 @@ void ObjectMgr::ValidateSpellScripts()
 
             if (auraScript)
             {
-                auraScript->_Init(&spellScriptLoader->GetName(), spellEntry->Id);
+                auraScript->_Init(spellScriptLoader->GetName(), spellEntry->Id);
                 auraScript->_Register();
 
                 if (!auraScript->_Validate(spellEntry))
@@ -6196,105 +6247,6 @@ InstanceTemplate const* ObjectMgr::GetInstanceTemplate(uint32 mapID) const
         return &(itr->second);
 
     return nullptr;
-}
-
-void ObjectMgr::LoadInstanceEncounters()
-{
-    uint32 oldMSTime = getMSTime();
-
-    //                                                 0         1            2                3
-    QueryResult result = WorldDatabase.Query("SELECT entry, creditType, creditEntry, lastEncounterDungeon FROM instance_encounters");
-    if (!result)
-    {
-        TC_LOG_INFO("server.loading", ">> Loaded 0 instance encounters, table is empty!");
-        return;
-    }
-
-    uint32 count = 0;
-    std::map<uint32, std::pair<uint32, DungeonEncounterEntry const*>> dungeonLastBosses;
-    do
-    {
-        Field* fields = result->Fetch();
-        uint32 entry = fields[0].GetUInt32();
-        uint8 creditType = fields[1].GetUInt8();
-        uint32 creditEntry = fields[2].GetUInt32();
-        uint32 lastEncounterDungeon = fields[3].GetUInt16();
-        DungeonEncounterEntry const* dungeonEncounter = sDungeonEncounterStore.LookupEntry(entry);
-        if (!dungeonEncounter)
-        {
-            TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid encounter id {}, skipped!", entry);
-            continue;
-        }
-
-        if (lastEncounterDungeon && !sLFGMgr->GetLFGDungeonEntry(lastEncounterDungeon))
-        {
-            TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an encounter {} ({}) marked as final for invalid dungeon id {}, skipped!",
-                entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()], lastEncounterDungeon);
-            continue;
-        }
-
-        auto itr = dungeonLastBosses.find(lastEncounterDungeon);
-        if (lastEncounterDungeon)
-        {
-            if (itr != dungeonLastBosses.end())
-            {
-                TC_LOG_ERROR("sql.sql", "Table `instance_encounters` specified encounter {} ({}) as last encounter but {} ({}) is already marked as one, skipped!",
-                    entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()], itr->second.first, itr->second.second->Name[sWorld->GetDefaultDbcLocale()]);
-                continue;
-            }
-
-            dungeonLastBosses[lastEncounterDungeon] = std::make_pair(entry, dungeonEncounter);
-        }
-
-        switch (creditType)
-        {
-            case ENCOUNTER_CREDIT_KILL_CREATURE:
-            {
-                CreatureTemplate const* creatureInfo = GetCreatureTemplate(creditEntry);
-                if (!creatureInfo)
-                {
-                    TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid creature (entry {}) linked to the encounter {} ({}), skipped!",
-                        creditEntry, entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()]);
-                    continue;
-                }
-                const_cast<CreatureTemplate*>(creatureInfo)->flags_extra |= CREATURE_FLAG_EXTRA_DUNGEON_BOSS;
-                break;
-            }
-            case ENCOUNTER_CREDIT_CAST_SPELL:
-                if (!sSpellMgr->GetSpellInfo(creditEntry, DIFFICULTY_NONE))
-                {
-                    TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid spell (entry {}) linked to the encounter {} ({}), skipped!",
-                        creditEntry, entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()]);
-                    continue;
-                }
-                break;
-            default:
-                TC_LOG_ERROR("sql.sql", "Table `instance_encounters` has an invalid credit type ({}) for encounter {} ({}), skipped!",
-                    creditType, entry, dungeonEncounter->Name[sWorld->GetDefaultDbcLocale()]);
-                continue;
-        }
-
-        if (!dungeonEncounter->DifficultyID)
-        {
-            for (DifficultyEntry const* difficulty : sDifficultyStore)
-            {
-                if (sDB2Manager.GetMapDifficultyData(dungeonEncounter->MapID, Difficulty(difficulty->ID)))
-                {
-                    DungeonEncounterList& encounters = _dungeonEncounterStore[MAKE_PAIR64(dungeonEncounter->MapID, difficulty->ID)];
-                    encounters.emplace_back(dungeonEncounter, EncounterCreditType(creditType), creditEntry, lastEncounterDungeon);
-                }
-            }
-        }
-        else
-        {
-            DungeonEncounterList& encounters = _dungeonEncounterStore[MAKE_PAIR64(dungeonEncounter->MapID, dungeonEncounter->DifficultyID)];
-            encounters.emplace_back(dungeonEncounter, EncounterCreditType(creditType), creditEntry, lastEncounterDungeon);
-        }
-
-        ++count;
-    } while (result->NextRow());
-
-    TC_LOG_INFO("server.loading", ">> Loaded {} instance encounters in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
 }
 
 NpcText const* ObjectMgr::GetNpcText(uint32 Text_ID) const
@@ -6718,10 +6670,10 @@ uint32 ObjectMgr::GetNearestTaxiNode(float x, float y, float z, uint32 mapid, ui
     float dist = 10000;
     uint32 id = 0;
 
-    uint32 requireFlag = (team == ALLIANCE) ? TAXI_NODE_FLAG_ALLIANCE : TAXI_NODE_FLAG_HORDE;
+    TaxiNodeFlags requireFlag = (team == ALLIANCE) ? TaxiNodeFlags::ShowOnAllianceMap : TaxiNodeFlags::ShowOnHordeMap;
     for (TaxiNodesEntry const* node : sTaxiNodesStore)
     {
-        if (!node || node->ContinentID != mapid || !(node->Flags & requireFlag))
+        if (!node || node->ContinentID != mapid || !node->GetFlags().HasFlag(requireFlag) || node->GetFlags().HasFlag(TaxiNodeFlags::IgnoreForFindNearest))
             continue;
 
         uint32 field   = uint32((node->ID - 1) / 8);
@@ -7611,8 +7563,8 @@ void ObjectMgr::LoadGameObjectTemplate()
                                              "Data0, Data1, Data2, Data3, Data4, Data5, Data6, Data7, Data8, Data9, Data10, Data11, Data12, "
     //                                        21      22      23      24      25      26      27      28      29      30      31      32      33      34      35      36
                                              "Data13, Data14, Data15, Data16, Data17, Data18, Data19, Data20, Data21, Data22, Data23, Data24, Data25, Data26, Data27, Data28, "
-    //                                        37      38       39     40      41      42      43               44      45
-                                             "Data29, Data30, Data31, Data32, Data33, Data34, ContentTuningId, AIName, ScriptName "
+    //                                        37      38       39     40      41      42      43               44      45          46
+                                             "Data29, Data30, Data31, Data32, Data33, Data34, ContentTuningId, AIName, ScriptName, StringId "
                                              "FROM gameobject_template");
 
     if (!result)
@@ -7644,6 +7596,7 @@ void ObjectMgr::LoadGameObjectTemplate()
         got.ContentTuningId = fields[43].GetInt32();
         got.AIName = fields[44].GetString();
         got.ScriptId = GetScriptId(fields[45].GetString());
+        got.StringId = fields[46].GetString();
 
         // Checks
         if (!got.AIName.empty() && !sGameObjectAIRegistry->HasItem(got.AIName))
@@ -8675,41 +8628,12 @@ bool ObjectMgr::IsReservedName(std::string_view name) const
     return _reservedNamesStore.find(wstr) != _reservedNamesStore.end();
 }
 
-enum LanguageType
+static EnumFlag<CfgCategoriesCharsets> GetRealmLanguageType(bool create)
 {
-    LT_BASIC_LATIN    = 0x0000,
-    LT_EXTENDEN_LATIN = 0x0001,
-    LT_CYRILLIC       = 0x0002,
-    LT_EAST_ASIA      = 0x0004,
-    LT_ANY            = 0xFFFF
-};
+    if (Cfg_CategoriesEntry const* category = sCfgCategoriesStore.LookupEntry(realm.Timezone))
+        return create ? category->GetCreateCharsetMask() : category->GetExistingCharsetMask();
 
-static LanguageType GetRealmLanguageType(bool create)
-{
-    switch (sWorld->getIntConfig(CONFIG_REALM_ZONE))
-    {
-        case REALM_ZONE_UNKNOWN:                            // any language
-        case REALM_ZONE_DEVELOPMENT:
-        case REALM_ZONE_TEST_SERVER:
-        case REALM_ZONE_QA_SERVER:
-            return LT_ANY;
-        case REALM_ZONE_UNITED_STATES:                      // extended-Latin
-        case REALM_ZONE_OCEANIC:
-        case REALM_ZONE_LATIN_AMERICA:
-        case REALM_ZONE_ENGLISH:
-        case REALM_ZONE_GERMAN:
-        case REALM_ZONE_FRENCH:
-        case REALM_ZONE_SPANISH:
-            return LT_EXTENDEN_LATIN;
-        case REALM_ZONE_KOREA:                              // East-Asian
-        case REALM_ZONE_TAIWAN:
-        case REALM_ZONE_CHINA:
-            return LT_EAST_ASIA;
-        case REALM_ZONE_RUSSIAN:                            // Cyrillic
-            return LT_CYRILLIC;
-        default:
-            return create ? LT_BASIC_LATIN : LT_ANY;        // basic-Latin at create, any at login
-    }
+    return create ? CfgCategoriesCharsets::English : CfgCategoriesCharsets::Any;        // basic-Latin at create, any at login
 }
 
 bool isValidString(const std::wstring& wstr, uint32 strictMask, bool numericOrSpace, bool create = false)
@@ -8720,23 +8644,28 @@ bool isValidString(const std::wstring& wstr, uint32 strictMask, bool numericOrSp
             return true;
         if (isCyrillicString(wstr, numericOrSpace))
             return true;
-        if (isEastAsianString(wstr, numericOrSpace))
+        if (isKoreanString(wstr, numericOrSpace))
+            return true;
+        if (isChineseString(wstr, numericOrSpace))
             return true;
         return false;
     }
 
     if (strictMask & 0x2)                                    // realm zone specific
     {
-        LanguageType lt = GetRealmLanguageType(create);
-        if (lt & LT_EXTENDEN_LATIN)
-            if (isExtendedLatinString(wstr, numericOrSpace))
-                return true;
-        if (lt & LT_CYRILLIC)
-            if (isCyrillicString(wstr, numericOrSpace))
-                return true;
-        if (lt & LT_EAST_ASIA)
-            if (isEastAsianString(wstr, numericOrSpace))
-                return true;
+        EnumFlag<CfgCategoriesCharsets> lt = GetRealmLanguageType(create);
+        if (lt == CfgCategoriesCharsets::Any)
+            return true;
+        if (lt.HasFlag(CfgCategoriesCharsets::Latin1) && isExtendedLatinString(wstr, numericOrSpace))
+            return true;
+        if (lt.HasFlag(CfgCategoriesCharsets::English) && isBasicLatinString(wstr, numericOrSpace))
+            return true;
+        if (lt.HasFlag(CfgCategoriesCharsets::Russian) && isCyrillicString(wstr, numericOrSpace))
+            return true;
+        if (lt.HasFlag(CfgCategoriesCharsets::Korean) && isKoreanString(wstr, numericOrSpace))
+            return true;
+        if (lt.HasFlag(CfgCategoriesCharsets::Chinese) && isChineseString(wstr, numericOrSpace))
+            return true;
     }
 
     if (strictMask & 0x1)                                    // basic Latin
@@ -10547,14 +10476,6 @@ VehicleAccessoryList const* ObjectMgr::GetVehicleAccessoryList(Vehicle* veh) con
     // Otherwise return entry-based
     VehicleAccessoryTemplateContainer::const_iterator itr = _vehicleTemplateAccessoryStore.find(veh->GetCreatureEntry());
     if (itr != _vehicleTemplateAccessoryStore.end())
-        return &itr->second;
-    return nullptr;
-}
-
-DungeonEncounterList const* ObjectMgr::GetDungeonEncounterList(uint32 mapId, Difficulty difficulty) const
-{
-    auto itr = _dungeonEncounterStore.find(MAKE_PAIR64(mapId, difficulty));
-    if (itr != _dungeonEncounterStore.end())
         return &itr->second;
     return nullptr;
 }

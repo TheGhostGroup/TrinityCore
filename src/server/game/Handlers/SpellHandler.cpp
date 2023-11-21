@@ -38,7 +38,7 @@
 #include "SpellAuraEffects.h"
 #include "SpellMgr.h"
 #include "SpellPackets.h"
-#include "Totem.h"
+#include "TemporarySummon.h"
 #include "TotemPackets.h"
 #include "World.h"
 
@@ -328,7 +328,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spells::CastSpell& cast)
     SpellCastTargets targets(caster, cast.Cast);
 
     // check known spell or raid marker spell (which not requires player to know it)
-    if (caster->GetTypeId() == TYPEID_PLAYER && !caster->ToPlayer()->HasActiveSpell(spellInfo->Id) && !spellInfo->HasEffect(SPELL_EFFECT_CHANGE_RAID_MARKER) && !spellInfo->HasAttribute(SPELL_ATTR8_RAID_MARKER))
+    if (caster->GetTypeId() == TYPEID_PLAYER && !caster->ToPlayer()->HasActiveSpell(spellInfo->Id) && !spellInfo->HasAttribute(SPELL_ATTR8_SKIP_IS_KNOWN_CHECK))
     {
         bool allow = false;
 
@@ -349,7 +349,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spells::CastSpell& cast)
     }
 
     // Check possible spell cast overrides
-    spellInfo = caster->GetCastSpellInfo(spellInfo);
+    spellInfo = caster->GetCastSpellInfo(spellInfo, triggerFlag);
 
     if (spellInfo->IsPassive())
         return;
@@ -428,7 +428,7 @@ void WorldSession::HandleCancelAuraOpcode(WorldPackets::Spells::CancelAura& canc
 
 void WorldSession::HandlePetCancelAuraOpcode(WorldPackets::Spells::PetCancelAura& packet)
 {
-    if (sSpellMgr->GetSpellInfo(packet.SpellID, DIFFICULTY_NONE))
+    if (!sSpellMgr->GetSpellInfo(packet.SpellID, DIFFICULTY_NONE))
     {
         TC_LOG_ERROR("network", "WORLD: unknown PET spell id {}", packet.SpellID);
         return;
@@ -533,8 +533,8 @@ void WorldSession::HandleTotemDestroyed(WorldPackets::Totem::TotemDestroyed& tot
         return;
 
     Creature* totem = ObjectAccessor::GetCreature(*_player, _player->m_SummonSlot[slotId]);
-    if (totem && totem->IsTotem() && totem->GetGUID() == totemDestroyed.TotemGUID)
-        totem->ToTotem()->UnSummon();
+    if (totem && totem->IsTotem() && (totemDestroyed.TotemGUID.IsEmpty() || totem->GetGUID() == totemDestroyed.TotemGUID))
+        totem->DespawnOrUnsummon();
 }
 
 void WorldSession::HandleSelfResOpcode(WorldPackets::Spells::SelfRes& selfRes)

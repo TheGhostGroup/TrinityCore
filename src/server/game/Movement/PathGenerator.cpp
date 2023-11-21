@@ -42,8 +42,8 @@ PathGenerator::PathGenerator(WorldObject const* owner) :
     if (DisableMgr::IsPathfindingEnabled(_source->GetMapId()))
     {
         MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
-        _navMesh = mmap->GetNavMesh(mapId);
-        _navMeshQuery = mmap->GetNavMeshQuery(mapId, _source->GetInstanceId());
+        _navMeshQuery = mmap->GetNavMeshQuery(mapId, _source->GetMapId(), _source->GetInstanceId());
+        _navMesh = _navMeshQuery ? _navMeshQuery->getAttachedNavMesh() : mmap->GetNavMesh(mapId);
     }
 
     CreateFilter();
@@ -674,6 +674,9 @@ void PathGenerator::CreateFilter()
 
 void PathGenerator::UpdateFilter()
 {
+    _filter.setIncludeFlags(_filter.getIncludeFlags() | _source->GetMap()->GetForceEnabledNavMeshFilterFlags());
+    _filter.setExcludeFlags(_filter.getExcludeFlags() | _source->GetMap()->GetForceDisabledNavMeshFilterFlags());
+
     // allow creatures to cheat and use different movement types if they are moved
     // forcefully into terrain they can't normally move in
     if (Unit const* _sourceUnit = _source->ToUnit())
