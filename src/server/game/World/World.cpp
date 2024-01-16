@@ -1301,6 +1301,7 @@ void World::LoadConfigSettings(bool reload)
     m_int_configs[CONFIG_CORPSE_DECAY_ELITE]      = sConfigMgr->GetIntDefault("Corpse.Decay.Elite", 300);
     m_int_configs[CONFIG_CORPSE_DECAY_RAREELITE]  = sConfigMgr->GetIntDefault("Corpse.Decay.RareElite", 300);
     m_int_configs[CONFIG_CORPSE_DECAY_OBSOLETE]   = sConfigMgr->GetIntDefault("Corpse.Decay.Obsolete", 3600);
+    m_int_configs[CONFIG_CORPSE_DECAY_RARE]       = sConfigMgr->GetIntDefault("Corpse.Decay.Rare", 300);
     m_int_configs[CONFIG_CORPSE_DECAY_TRIVIAL]    = sConfigMgr->GetIntDefault("Corpse.Decay.Trivial", 300);
     m_int_configs[CONFIG_CORPSE_DECAY_MINUSMOB]   = sConfigMgr->GetIntDefault("Corpse.Decay.MinusMob", 150);
 
@@ -2088,6 +2089,9 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Game Event Data...");               // must be after loading pools fully
     sGameEventMgr->LoadFromDB();
 
+    TC_LOG_INFO("server.loading", "Loading creature summoned data...");
+    sObjectMgr->LoadCreatureSummonedData();                     // must be after LoadCreatureTemplates() and LoadQuests()
+
     TC_LOG_INFO("server.loading", "Loading UNIT_NPC_FLAG_SPELLCLICK Data..."); // must be after LoadQuests
     sObjectMgr->LoadNPCSpellClickSpells();
 
@@ -2280,8 +2284,8 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Vendors...");
     sObjectMgr->LoadVendors();                                  // must be after load CreatureTemplate and ItemTemplate
 
-    TC_LOG_INFO("server.loading", "Loading Waypoints...");
-    sWaypointMgr->Load();
+    TC_LOG_INFO("server.loading", "Loading Waypoint paths...");
+    sWaypointMgr->LoadPaths();
 
     TC_LOG_INFO("server.loading", "Loading Creature Formations...");
     sFormationMgr->LoadCreatureFormations();
@@ -3531,19 +3535,6 @@ void World::DailyReset()
         if (Player* player = itr->second->GetPlayer())
             player->DailyReset();
 
-    {
-        std::ostringstream questIds;
-        questIds << "DELETE cq, cqo FROM character_queststatus cq LEFT JOIN character_queststatus_objectives cqo ON cq.quest = cqo.quest WHERE cq.quest IN (";
-        for (auto const& [questId, quest] : sObjectMgr->GetQuestTemplates())
-        {
-            if (quest.IsDaily() && quest.HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
-                questIds << questId << ',';
-        }
-        questIds << "0)";
-
-        CharacterDatabase.Execute(questIds.str().c_str());
-    }
-
     // reselect pools
     sQuestPoolMgr->ChangeDailyQuests();
 
@@ -3579,19 +3570,6 @@ void World::ResetWeeklyQuests()
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
         if (Player* player = itr->second->GetPlayer())
             player->ResetWeeklyQuestStatus();
-
-    {
-        std::ostringstream questIds;
-        questIds << "DELETE cq, cqo FROM character_queststatus cq LEFT JOIN character_queststatus_objectives cqo ON cq.quest = cqo.quest WHERE cq.quest IN (";
-        for (auto const& [questId, quest] : sObjectMgr->GetQuestTemplates())
-        {
-            if (quest.IsWeekly() && quest.HasFlagEx(QUEST_FLAGS_EX_REMOVE_ON_PERIODIC_RESET))
-                questIds << questId << ',';
-        }
-        questIds << "0)";
-
-        CharacterDatabase.Execute(questIds.str().c_str());
-    }
 
     // reselect pools
     sQuestPoolMgr->ChangeWeeklyQuests();

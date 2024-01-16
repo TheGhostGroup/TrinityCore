@@ -1593,6 +1593,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void RemoveRewardedQuest(uint32 questId, bool update = true);
         void SendQuestUpdate(uint32 questId);
         QuestGiverStatus GetQuestDialogStatus(Object const* questGiver) const;
+        void SkipQuests(std::vector<uint32> const& questIds); // removes quest from log, flags rewarded, but does not give any rewards to player
+        void DespawnPersonalSummonsForQuest(uint32 questId);
 
         void SetDailyQuestStatus(uint32 quest_id);
         bool IsDailyQuestDone(uint32 quest_id) const;
@@ -1611,7 +1613,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         int64 GetQuestSlotEndTime(uint16 slot) const;
         bool GetQuestSlotObjectiveFlag(uint16 slot, int8 objectiveIndex) const;
         int32 GetQuestSlotObjectiveData(uint16 slot, QuestObjective const& objective) const;
-        int32 GetQuestSlotObjectiveData(uint32 questId, uint32 objectiveId) const;
+        int32 GetQuestObjectiveData(uint32 questId, uint32 objectiveId) const;
         void SetQuestSlot(uint16 slot, uint32 quest_id);
         void SetQuestSlotCounter(uint16 slot, uint8 counter, uint16 count);
         void SetQuestSlotState(uint16 slot, uint32 state);
@@ -1624,7 +1626,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         uint16 GetReqKillOrCastCurrentCount(uint32 quest_id, int32 entry) const;
         void AreaExploredOrEventHappens(uint32 questId);
         void GroupEventHappens(uint32 questId, WorldObject const* pEventObject);
-        void ItemAddedQuestCheck(uint32 entry, uint32 count);
+        void ItemAddedQuestCheck(uint32 entry, uint32 count, Optional<bool> boundItemFlagRequirement = {}, bool* hadBoundItemObjective = nullptr);
         void ItemRemovedQuestCheck(uint32 entry, uint32 count);
         void KilledMonster(CreatureTemplate const* cInfo, ObjectGuid guid);
         void KilledMonsterCredit(uint32 entry, ObjectGuid guid = ObjectGuid::Empty);
@@ -1635,8 +1637,10 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void MoneyChanged(uint64 value);
         void ReputationChanged(FactionEntry const* factionEntry, int32 change);
         void CurrencyChanged(uint32 currencyId, int32 change);
-        void UpdateQuestObjectiveProgress(QuestObjectiveType objectiveType, int32 objectId, int64 addCount, ObjectGuid victimGuid = ObjectGuid::Empty);
+        void UpdateQuestObjectiveProgress(QuestObjectiveType objectiveType, int32 objectId, int64 addCount, ObjectGuid victimGuid = ObjectGuid::Empty,
+            std::vector<QuestObjective const*>* updatedObjectives = nullptr, std::function<bool(QuestObjective const*)> const* objectiveFilter = nullptr);
         bool HasQuestForItem(uint32 itemId) const;
+        QuestObjective const* GetQuestObjectiveForItem(uint32 itemId, bool onlyIncomplete) const;
         bool HasQuestForGO(int32 goId) const;
         void UpdateVisibleGameobjectsOrSpellClicks();
         bool CanShareQuest(uint32 questId) const;
@@ -1656,6 +1660,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void SendPushToPartyResponse(Player const* player, QuestPushReason reason, Quest const* quest = nullptr) const;
         void SendQuestUpdateAddCredit(Quest const* quest, ObjectGuid guid, QuestObjective const& obj, uint16 count) const;
         void SendQuestUpdateAddCreditSimple(QuestObjective const& obj) const;
+        void SendQuestUpdateAddItem(ItemTemplate const* itemTemplate, QuestObjective const& obj, uint16 count) const;
         void SendQuestUpdateAddPlayer(Quest const* quest, uint16 newCount) const;
         void SendQuestGiverStatusMultiple();
         void SendQuestGiverStatusMultiple(GuidUnorderedSet const& guids);
@@ -2121,11 +2126,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void DestroyForPlayer(Player* target) const override;
 
         // notifiers
-        void SendAttackSwingCantAttack() const;
         void SendAttackSwingCancelAttack() const;
-        void SendAttackSwingDeadTarget() const;
-        void SendAttackSwingNotInRange() const;
-        void SendAttackSwingBadFacingAttack() const;
+        void SetAttackSwingError(Optional<AttackSwingErr> err);
         void SendAutoRepeatCancel(Unit* target);
         void SendExplorationExperience(uint32 Area, uint32 Experience) const;
 
@@ -2360,6 +2362,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void CastItemCombatSpell(DamageInfo const& damageInfo, Item* item, ItemTemplate const* proto);
         void CastItemUseSpell(Item* item, SpellCastTargets const& targets, ObjectGuid castCount, int32* misc);
         void ApplyItemLootedSpell(Item* item, bool apply);
+        void ApplyItemLootedSpell(ItemTemplate const* itemTemplate);
 
         void SendEquipmentSetList();
         void SetEquipmentSet(EquipmentSetInfo::EquipmentSetData const& newEqSet);
@@ -3090,7 +3093,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool m_canBlock;
         bool m_canTitanGrip;
         uint32 m_titanGripPenaltySpellId;
-        uint8 m_swingErrorMsg;
+        Optional<AttackSwingErr> m_swingErrorMsg;
 
         // Social
         PlayerSocial* m_social;
