@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 TrinityCore <https://www.trinitycore.org/>
+ * Copyright (C) 2008-2024 TrinityCore <https://www.trinitycore.org/>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -17,13 +17,13 @@
 
 // This is where scripts' loading functions should be declared:
 
-void AddSC_startup_script();
+void AddSC_instance_scripts();
 void AddSC_dk_startzone_skip_module();
 
 // The name of this function should match:
 // void Add${NameOfDirectory}Scripts()
 void AddCustomScripts()
 {
-    AddSC_startup_script();
+    AddSC_instance_scripts();
     AddSC_dk_startzone_skip_module();
 }
