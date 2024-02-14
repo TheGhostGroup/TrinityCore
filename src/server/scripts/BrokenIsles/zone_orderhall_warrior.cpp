@@ -1032,5 +1032,8 @@ void AddSC_orderhall_warrior()
     RegisterCreatureAI(npc_valkyr_of_odyn_6);
     RegisterCreatureAI(npc_valkyr_of_odyn_7);
     RegisterCreatureAI(npc_weapon_inspector_valarjar);
+    RegisterCreatureAI(npc_class_hall_warrior_aerylia);
+    RegisterSpellScript(spell_class_hall_warrior_jump_teleport);
+    RegisterSpellScript(spell_class_hall_warrior_jump_exit);
     new scene_odyn_intro();
 }
