@@ -16,6 +16,7 @@
  */
 
 // This is where scripts' loading functions should be declared:
+void AddSC_instance_eye_of_azshara();
 void AddSC_orderhall_warrior();
 void AddSC_dalaran_legion();
 
@@ -23,6 +24,7 @@ void AddSC_dalaran_legion();
 // void Add${NameOfDirectory}Scripts()
 void AddBrokenIslesScripts()
 {
+    AddSC_instance_eye_of_azshara();
     AddSC_orderhall_warrior();
     AddSC_dalaran_legion();
 }

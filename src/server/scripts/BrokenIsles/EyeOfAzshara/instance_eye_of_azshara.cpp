@@ -15,6 +15,23 @@
 * with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+class instance_eye_of_azshara : public InstanceMapScript
+{
+public:
+    instance_eye_of_azshara() : InstanceMapScript("instance_eye_of_azshara", 1456) {}
+
+    InstanceScript* GetInstanceScript(InstanceMap* map) const override
+    {
+        return new instance_eye_of_azshara_InstanceScript(map);
+    }
+
+    struct instance_eye_of_azshara_InstanceScript : public InstanceScript
+    {
+        instance_eye_of_azshara_InstanceScript(InstanceMap* map) : InstanceScript(map) {}
+    };
+};
+
 void AddSC_instance_eye_of_azshara()
 {
+    new instance_eye_of_azshara();
 }
