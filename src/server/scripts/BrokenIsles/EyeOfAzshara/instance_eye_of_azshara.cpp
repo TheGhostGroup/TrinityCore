@@ -15,6 +15,8 @@
 * with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "instance_eye_of_azshara.h"
+
 class instance_eye_of_azshara : public InstanceMapScript
 {
 public:
