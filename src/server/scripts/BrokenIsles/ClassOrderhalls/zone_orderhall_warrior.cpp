@@ -1017,10 +1017,10 @@ public:
 enum seargeant_dalton
 {
     QUEST_A_AN_IMPORTANT_MISSION = 42814,
-    SAY_DALTON_FIRST_LINE = 0,
-    SAY_DALTON_SECOND_LINE = 1,
-    SAY_DALTON_THIRD_LINE = 2,
-
+    SAY_DALTON_FIRST_LINE        = 0,
+    SAY_DALTON_SECOND_LINE       = 1,
+    SAY_DALTON_THIRD_LINE        = 2,
+    SAY_DALTON_FOURTH_LINE       = 4,
     DALTON_SECOND_LINE,
     DALTON_THIRD_LINE,
 };
@@ -1061,7 +1061,6 @@ struct npc_sergeant_dalton_108961 : public ScriptedAI
                     break;
                 case DALTON_THIRD_LINE:
                     Talk(SAY_DALTON_THIRD_LINE);
-                    me->DespawnOrUnsummon(5000);
                     break;
                 default:
                     break;
@@ -1075,7 +1074,8 @@ struct npc_sergeant_dalton_108961 : public ScriptedAI
         {
             if (player->GetTeamId() == TEAM_ALLIANCE && player->GetAreaId() == 7502 && player->getClass() == CLASS_WARRIOR)
                 PhasingHandler::OnConditionChange(player);
-            events.ScheduleEvent(DALTON_SECOND_LINE, 1s);
+            Talk(SAY_DALTON_FOURTH_LINE);
+            me->DespawnOrUnsummon(5000);
         }
     }
 
