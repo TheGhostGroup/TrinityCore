@@ -1014,6 +1014,75 @@ public:
     }
 };
 
+enum seargeant_dalton
+{
+    QUEST_A_AN_IMPORTANT_MISSION = 42814,
+    SAY_DALTON_FIRST_LINE = 0,
+    SAY_DALTON_SECOND_LINE = 1,
+    SAY_DALTON_THIRD_LINE = 2,
+
+    DALTON_SECOND_LINE,
+    DALTON_THIRD_LINE,
+};
+
+struct npc_sergeant_dalton_108961 : public ScriptedAI
+{
+    npc_sergeant_dalton_108961(Creature* creature) : ScriptedAI(creature) { }
+
+    void Reset() override
+    {
+        ObjectGuid charmerOrOwnerGuid = me->GetCharmerOrOwnerGUID();
+
+        if (!charmerOrOwnerGuid)
+            if (TempSummon* tempSummon = me->ToTempSummon())
+                if (Unit* summoner = tempSummon->GetSummoner())
+                    charmerOrOwnerGuid = summoner->GetGUID();
+
+        if (!charmerOrOwnerGuid)
+            charmerOrOwnerGuid = me->GetCreatorGUID();
+
+        if (Unit* owner = ObjectAccessor::GetUnit(*me, charmerOrOwnerGuid))
+        {
+            me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, me->GetFollowAngle());
+            Talk(SAY_DALTON_FIRST_LINE, owner);
+        }
+    }
+
+    void UpdateAI(uint32 diff) override
+    {
+        events.Update(diff);
+        while (uint32 eventId = events.ExecuteEvent())
+        {
+            switch (eventId)
+            {
+                case DALTON_SECOND_LINE:
+                    Talk(SAY_DALTON_SECOND_LINE);
+                    events.ScheduleEvent(DALTON_THIRD_LINE, 2s);
+                    break;
+                case DALTON_THIRD_LINE:
+                    Talk(SAY_DALTON_THIRD_LINE);
+                    me->DespawnOrUnsummon(5000);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    void sQuestAccept(Player* player, Quest const* quest) override
+    {
+        if (quest->GetQuestId() == QUEST_A_AN_IMPORTANT_MISSION)
+        {
+            if (player->GetTeamId() == TEAM_ALLIANCE && player->GetAreaId() == 7502 && player->getClass() == CLASS_WARRIOR)
+                PhasingHandler::OnConditionChange(player);
+            events.ScheduleEvent(DALTON_SECOND_LINE, 1s);
+        }
+    }
+
+private:
+    EventMap events;
+};
+
 void AddSC_orderhall_warrior()
 {
     RegisterCreatureAI(npc_danica_the_reclaimer);
@@ -1036,4 +1105,5 @@ void AddSC_orderhall_warrior()
     RegisterSpellScript(spell_class_hall_warrior_jump_teleport);
     RegisterSpellScript(spell_class_hall_warrior_jump_exit);
     new scene_odyn_intro();
+    RegisterCreatureAI(npc_sergeant_dalton_108961);
 }
