@@ -22,8 +22,6 @@
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "PhasingHandler.h"
-#include "WorldSession.h"
-#include "Chat.h"
 
 enum LegionIntroSkip
 {
@@ -51,8 +49,32 @@ public:
     }
 };
 
+enum BrokenShoreIntro
+{
+    SPELL_LEAVE_FOR_BROKEN_SHORE_SCENE = 216356,
+    SPELL_LEAVE_FOR_BROKEN_SHORE_QUEUE = 227058,
+    NPC_KILLCREDIT_ANGELICA            = 108928
+};
+
+// 108920
+class npc_captain_angelica_108920 : public CreatureScript
+{
+public:
+    npc_captain_angelica_108920() : CreatureScript("npc_captain_angelica_108920") { }
+
+    bool OnGossipSelect(Player* player, Creature* /*creature*/, uint32 /*sender*/, uint32 /*action*/)
+    {
+        player->PlayerTalkClass->ClearMenus();
+        player->KilledMonsterCredit(NPC_KILLCREDIT_ANGELICA);
+        player->CastSpell(player, SPELL_LEAVE_FOR_BROKEN_SHORE_QUEUE, false); //join Broken Shore Scenario
+        player->CastSpell(player, SPELL_LEAVE_FOR_BROKEN_SHORE_SCENE, false); //scene
+        return true;
+    }
+};
+
 
 void AddSC_stormwind_city()
 {
     new npc_recruter_lee();
+    new npc_captain_angelica_108920();
 }
