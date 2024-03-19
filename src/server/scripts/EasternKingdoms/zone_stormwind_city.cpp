@@ -53,7 +53,8 @@ enum BrokenShoreIntro
 {
     SPELL_LEAVE_FOR_BROKEN_SHORE_SCENE = 216356,
     SPELL_LEAVE_FOR_BROKEN_SHORE_QUEUE = 227058,
-    NPC_KILLCREDIT_ANGELICA            = 108928
+    NPC_KILLCREDIT_ANGELICA            = 108928,
+    MAP_BROKENSHORE                    = 1460
 };
 
 // 108920
@@ -72,9 +73,26 @@ public:
     }
 };
 
+class scene_broken_shore_intro_alliance : public SceneScript
+{
+public:
+    scene_broken_shore_intro_alliance() : SceneScript("scene_broken_shore_intro_alliance") {}
+
+    void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        player->TeleportTo(MAP_BROKENSHORE, 2.39286f, 1.694546f, 5.205733f, 3.1559224f);
+    }
+
+    void OnSceneCancel(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        player->TeleportTo(MAP_BROKENSHORE, 2.39286f, 1.694546f, 5.205733f, 3.1559224f);
+    }
+};
+
 
 void AddSC_stormwind_city()
 {
     new npc_recruter_lee();
     new npc_captain_angelica_108920();
+    new scene_broken_shore_intro_alliance();
 }
