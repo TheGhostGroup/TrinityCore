@@ -1020,7 +1020,7 @@ enum seargeant_dalton
     SAY_DALTON_FIRST_LINE        = 0,
     SAY_DALTON_SECOND_LINE       = 1,
     SAY_DALTON_THIRD_LINE        = 2,
-    SAY_DALTON_FOURTH_LINE       = 4,
+    SAY_DALTON_FOURTH_LINE       = 3,
     DALTON_SECOND_LINE,
     DALTON_THIRD_LINE,
 };
