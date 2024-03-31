@@ -1072,8 +1072,7 @@ struct npc_sergeant_dalton_108961 : public ScriptedAI
     {
         if (quest->GetQuestId() == QUEST_A_AN_IMPORTANT_MISSION)
         {
-            if (player->GetTeamId() == TEAM_ALLIANCE && player->GetAreaId() == 7502 && player->getClass() == CLASS_WARRIOR)
-                PhasingHandler::OnConditionChange(player);
+            PhasingHandler::OnConditionChange(player);
             Talk(SAY_DALTON_FOURTH_LINE);
             me->DespawnOrUnsummon(5000);
         }
