@@ -1045,6 +1045,7 @@ struct npc_sergeant_dalton_108961 : public ScriptedAI
         {
             me->GetMotionMaster()->MoveFollow(owner, PET_FOLLOW_DIST, me->GetFollowAngle());
             Talk(SAY_DALTON_FIRST_LINE, owner);
+            events.ScheduleEvent(DALTON_SECOND_LINE, 3s);
         }
     }
 
@@ -1057,7 +1058,7 @@ struct npc_sergeant_dalton_108961 : public ScriptedAI
             {
                 case DALTON_SECOND_LINE:
                     Talk(SAY_DALTON_SECOND_LINE);
-                    events.ScheduleEvent(DALTON_THIRD_LINE, 2s);
+                    events.ScheduleEvent(DALTON_THIRD_LINE, 3s);
                     break;
                 case DALTON_THIRD_LINE:
                     Talk(SAY_DALTON_THIRD_LINE);
