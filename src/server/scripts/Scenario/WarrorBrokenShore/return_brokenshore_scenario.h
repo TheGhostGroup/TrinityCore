@@ -25,4 +25,36 @@
 
 uint32 const EncounterCount = 3;
 
+enum Creatures
+{
+    NPC_DANATH_TROLLBANE      = 109079,
+    NPC_ELITE_GRYPHON         = 108974,
+    NPC_RAGNVALD_DRAKEBORN    = 97167,
+    NPC_FINA_BJORNSDOTTIR     = 97166,
+    NPC_HAARDGRIM             = 102964,
+    NPC_ALRIK_THE_SLAYER      = 102965,
+    NPC_DANICA_RECLAIMER      = 103608,
+    NPC_ASPIRING_VRYKUL_HERO  = 102990,
+
+    // Bosses
+    NPC_BEZZEREDES          = 98257,
+    NPC_MALGALOR            = 92608,
+    NPC_FEL_LORD_DAKUUR     = 102970,
+
+    // Trash
+    NPC_EREDAR_ENSLAVER     = 97176,
+};
+
+enum Spells
+{
+    SPELL_CONVERSATION_A_DANATH_FLIGHT = 216892, // Conversation Template ID: 2646
+    SPELL_CONVERSATION                 = 197583,  // Conversation Template ID: 770
+
+    SPELL_WHIRLWIND                    = 13736,
+    SPELL_MORTAL_STRIKE                = 15708,
+    SPELL_THUNDERCLAP                  = 15588,
+    SPELL_CLEAVE                       = 16044,
+    SPELL_FEIGN_DEATH                  = 105419,
+};
+
 #endif // !__RETURN_BROKENSHORE_H__
