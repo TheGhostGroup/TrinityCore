@@ -19,23 +19,26 @@
 
 enum DukeLankral
 {
-    // DK Intro Quests
-    QUEST_THE_CALL_TO_WAR              = 40714,
-    QUEST_A_PACT_OF_NECESSITY          = 40715,
-
-    SPELL_PLAYER_CHOICE                = 199985,
+    KILL_CREDIT_ARTIFACT_WEAPON_CHOSEN = 101441,
 
     PLAYER_CHOICE_DK_BLOOD             = 541,
     PLAYER_CHOICE_DK_FROST             = 542,
     PLAYER_CHOICE_DK_UNHOLY            = 543,
 
-    KILL_CREDIT_ARTIFACT_WEAPON_CHOSEN = 101441,
+    // DK Intro Quests
+    QUEST_THE_CALL_TO_WAR              = 40714,
+    QUEST_A_PACT_OF_NECESSITY          = 40715,
     // Blood Artifact Quest
     QUEST_THE_DEAD_AND_THE_DAMNED      = 40740,
     // Frost Artifact Quest
     QUEST_THE_CALL_OF_ICECROWN         = 38990,
     // Unholy Artifact Quest
     QUEST_APOCALYPSE                   = 40930,
+
+    SAY_LANKRAL_FIRST_LINE             = 0,
+
+    SPELL_PLAYER_CHOICE                = 199985,
+    SPELL_DEATH_GATE                   = 225224,
 };
 
 void AddSC_zone_orderhall_dk()
