@@ -80,22 +80,11 @@ class spell_razelikh_teleport_group : public SpellScriptLoader
         }
 };
 
-enum DraenorIntro
+enum Zidormi
 {
-    QUEST_THE_DARK_PORTAL     = 36881,
-    QUEST_THE_DARK_PORTAL_2   = 34398,
 
-    MAP_TANAAN_JUNGLE         = 1265,
     MAP_BLASTED_LANDS_PHASE   = 1190,
     MAP_EASTERN_KINGDOMS      = 0,
-
-    CREDIT_SPEAK_WITH_KHADGAR = 78419,
-
-    SCENE_ENTER_PORTAL        = 199,
-
-    GOSSIP_MENU_DRAENOR_INTRO = 16863,
-    GOSSIP_MENU_OPTION        = 0,
-
     SPELL_TIME_TRAVELLING     = 176111
 };
 
@@ -158,62 +147,27 @@ public:
     }
 };
 
-struct npc_archmage_khadgar_blastedlands : public ScriptedAI
+enum DreanorIntro
+{
+    SCENE_ENTER_THE_PORTAL    = 185,
+    SPELL_TELEPORT_TO_TANAAN  = 167771,
+};
+
+class player_teleport_to_tanaan : public PlayerScript
 {
 public:
-     npc_archmage_khadgar_blastedlands(Creature* creature) : ScriptedAI(creature) { }
+    player_teleport_to_tanaan() : PlayerScript("player_teleport_to_tanaan") { }
 
-         bool OnGossipHello(Player* player)
-         {
-             if (me->IsQuestGiver())
-                 player->PrepareQuestMenu(me->GetGUID());
-
-             if (player->GetQuestStatus(QUEST_THE_DARK_PORTAL) == QUEST_STATUS_INCOMPLETE)
-             {
-                 AddGossipItemFor(player, GOSSIP_MENU_DRAENOR_INTRO, GOSSIP_MENU_OPTION, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 0);
-                 SendGossipMenuFor(player, GOSSIP_MENU_DRAENOR_INTRO, me->GetGUID());
-             }
-             else
-                 SendGossipMenuFor(player, player->GetGossipTextId(me), me->GetGUID());
-
-             return true;
-         }
-
-         bool OnGossipSelect(Player* player, uint32 /*menuId*/, uint32 gossipListId)
-         {
-             uint32 const action = player->PlayerTalkClass->GetGossipOptionAction(gossipListId);
-             if (action == GOSSIP_ACTION_INFO_DEF + 0)
-             {
-                 if (player->GetQuestStatus(QUEST_THE_DARK_PORTAL) == QUEST_STATUS_INCOMPLETE)
-                 {
-                     CloseGossipMenuFor(player);
-                     player->AddMovieDelayedAction(SCENE_ENTER_PORTAL, [player]
-                     {
-                        player->TeleportTo(MAP_TANAAN_JUNGLE, 4066.7370f, -2381.9917f, 94.858f, 2.90f);
-                     });
-                     player->SendMovieStart(SCENE_ENTER_PORTAL);
-                     player->KilledMonsterCredit(CREDIT_SPEAK_WITH_KHADGAR);
-                     return true;
-                 }
-                 else if (player->GetQuestStatus(QUEST_THE_DARK_PORTAL_2) == QUEST_STATUS_INCOMPLETE)
-                 {
-                     CloseGossipMenuFor(player);
-                     player->AddMovieDelayedAction(SCENE_ENTER_PORTAL, [player]
-                     {
-                        player->TeleportTo(MAP_TANAAN_JUNGLE, 4066.7370f, -2381.9917f, 94.858f, 2.90f);
-                     });
-                     player->SendMovieStart(SCENE_ENTER_PORTAL);
-                     player->KilledMonsterCredit(CREDIT_SPEAK_WITH_KHADGAR);
-                     return true;
-                 }
-             }
-             return true;
-         }
- };
+    void OnMovieComplete(Player* player, uint32 movieId) override
+    {
+        if (movieId == SCENE_ENTER_THE_PORTAL)
+            player->CastSpell(player, SPELL_TELEPORT_TO_TANAAN);
+    }
+};
 
 void AddSC_blasted_lands()
 {
     new spell_razelikh_teleport_group();
-    RegisterCreatureAI(npc_archmage_khadgar_blastedlands);
     new npc_zidormi_blasted_lands();
+    new player_teleport_to_tanaan();
 }
