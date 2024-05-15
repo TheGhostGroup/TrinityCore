@@ -13,7 +13,16 @@
 * with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "Conversation.h"
+#include "PhasingHandler.h"
+#include "Player.h"
 #include "ScriptMgr.h"
+#include "SpellScript.h"
+
+enum MardumConversations
+{
+    CONVERSATION_DEMONHUNTER_INTRO_START = 705
+};
 
 enum MardumQuests
 {
@@ -31,7 +40,6 @@ enum MardumQuests
     QUEST_CRY_HAVOC                			= 39516,
     QUEST_THEIR_NUMBERS_ARE_LEGION 			= 38819
 };
-
 
 enum MardumSpells
 {
@@ -106,7 +114,23 @@ enum MardumMisc
 	ZONE_MARDUM      = 7705
 };
 
+class scene_demonhunter_intro : public SceneScript
+{
+public:
+    scene_demonhunter_intro() : SceneScript("scene_demonhunter_intro") { }
+
+    void OnSceneStart(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        Conversation::CreateConversation(CONVERSATION_DEMONHUNTER_INTRO_START, player, player->GetPosition(), { player->GetGUID() });
+    }
+
+    void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        PhasingHandler::OnConditionChange(player);
+    }
+};
+
 void AddSC_zone_mardum()
 {
-
+    new scene_demonhunter_intro();
 }
