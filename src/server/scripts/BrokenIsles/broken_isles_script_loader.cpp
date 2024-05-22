@@ -19,6 +19,7 @@
 void AddSC_instance_eye_of_azshara();
 void AddSC_orderhall_warrior();
 void AddSC_dalaran_legion();
+void AddSC_zone_mardum();
 
 // The name of this function should match:
 // void Add${NameOfDirectory}Scripts()
@@ -27,4 +28,5 @@ void AddBrokenIslesScripts()
     AddSC_instance_eye_of_azshara();
     AddSC_orderhall_warrior();
     AddSC_dalaran_legion();
+    AddSC_zone_mardum();
 }
