@@ -2210,7 +2210,7 @@ uint32 Item::GetBuyPrice(ItemTemplate const* proto, uint32 quality, uint32 itemL
         typeFactor = weaponPrice->Data;
     }
 
-    standardPrice = false;
+    standardPrice = true;
     return uint32(proto->GetPriceVariance() * typeFactor * baseFactor * qualityFactor * proto->GetPriceRandomValue());
 }
 
@@ -2250,8 +2250,8 @@ uint32 Item::GetItemLevel(Player const* owner) const
     ItemTemplate const* itemTemplate = GetTemplate();
     uint32 minItemLevel = owner->m_unitData->MinItemLevel;
     uint32 minItemLevelCutoff = owner->m_unitData->MinItemLevelCutoff;
-    uint32 maxItemLevel = itemTemplate->HasFlag(ITEM_FLAG3_IGNORE_ITEM_LEVEL_CAP_IN_PVP) ? 0 : owner->m_unitData->MaxItemLevel;
     bool pvpBonus = owner->IsUsingPvpItemLevels();
+    uint32 maxItemLevel = pvpBonus && itemTemplate->HasFlag(ITEM_FLAG3_IGNORE_ITEM_LEVEL_CAP_IN_PVP) ? 0 : owner->m_unitData->MaxItemLevel;
     uint32 azeriteLevel = 0;
     if (AzeriteItem const* azeriteItem = ToAzeriteItem())
         azeriteLevel = azeriteItem->GetEffectiveLevel();
@@ -2756,6 +2756,8 @@ void Item::GiveArtifactXp(uint64 amount, Item* sourceItem, uint32 artifactCatego
     owner->SendDirectMessage(artifactXpGain.Write());
 
     SetState(ITEM_CHANGED, owner);
+
+    owner->UpdateCriteria(CriteriaType::EarnArtifactXP, amount);
 }
 
 void Item::SetFixedLevel(uint8 level)

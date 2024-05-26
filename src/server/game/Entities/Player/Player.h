@@ -148,9 +148,14 @@ enum PlayerDataFlagConstants
 {
     PLAYER_EXPLORED_ZONES_BITS  = UF::size_of_value_type<decltype(UF::ActivePlayerData::DataFlags)::value_type>() * 8,
 
-    PLAYER_DATA_FLAG_EXPLORED_ZONES_INDEX   = 1,
-    PLAYER_DATA_FLAG_CHARACTER_INDEX        = 2,
-    PLAYER_DATA_FLAG_ACCOUNT_INDEX          = 3,
+    PLAYER_DATA_FLAG_EXPLORED_ZONES_INDEX                   = 1,
+    PLAYER_DATA_FLAG_CHARACTER_DATA_INDEX                   = 2,
+    PLAYER_DATA_FLAG_ACCOUNT_DATA_INDEX                     = 3,
+    PLAYER_DATA_FLAG_CHARACTER_TAXI_NODES_INDEX             = 4,
+    PLAYER_DATA_FLAG_ACCOUNT_TAXI_NODES_INDEX               = 5,
+    PLAYER_DATA_FLAG_ACCOUNT_COMBINED_QUESTS_INDEX          = 6,
+    PLAYER_DATA_FLAG_ACCOUNT_COMBINED_QUEST_REWARDS_INDEX   = 7,
+    PLAYER_DATA_FLAG_CHARACTER_CONTENTPUSH_INDEX            = 8,
 };
 
 enum SpellModType : uint8
@@ -768,6 +773,20 @@ enum class ItemSearchCallbackResult
     Continue
 };
 
+enum class BagSlotFlags : uint32
+{
+    None                = 0x00,
+    DisableAutoSort     = 0x01,
+    PriorityEquipment   = 0x02,
+    PriorityConsumables = 0x04,
+    PriorityTradeGoods  = 0x08,
+    PriorityJunk        = 0x10,
+    PriorityQuestItems  = 0x20,
+    ExcludeJunkSell     = 0x40,
+};
+
+DEFINE_ENUM_FLAG(BagSlotFlags);
+
 enum NewWorldReason
 {
     NEW_WORLD_NORMAL    = 16,   // Normal map change
@@ -990,6 +1009,16 @@ enum class DisplayToastMethod : uint8
     CorruptedLoot           = 19
 };
 
+enum class AvgItemLevelCategory : uint32
+{
+    Base                        = 0,
+    EquippedBase                = 1,
+    EquippedEffective           = 2,
+    Pvp                         = 3,
+    PvpWeighted                 = 4,
+    EquippedEffectiveWeighted   = 5
+};
+
 class Player;
 
 /// Holder for Battleground data
@@ -1105,6 +1134,13 @@ enum class ZonePVPTypeOverride : uint32
     Combat      = 4
 };
 
+struct TeleportLocation
+{
+    WorldLocation Location;
+    Optional<uint32> InstanceId;
+    Optional<ObjectGuid> TransportGuid;
+};
+
 class TC_GAME_API Player final : public Unit, public GridObject<Player>
 {
     friend class WorldSession;
@@ -1127,6 +1163,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
 
         bool TeleportTo(uint32 mapid, float x, float y, float z, float orientation, TeleportToOptions options = TELE_TO_NONE, Optional<uint32> instanceId = {});
         bool TeleportTo(WorldLocation const& loc, TeleportToOptions options = TELE_TO_NONE, Optional<uint32> instanceId = {});
+        bool TeleportTo(TeleportLocation const& teleportLocation, TeleportToOptions options = TELE_TO_NONE);
         bool TeleportToBGEntryPoint();
 
         bool HasSummonPending() const;
@@ -1136,6 +1173,8 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         bool Create(ObjectGuid::LowType guidlow, WorldPackets::Character::CharacterCreateInfo const* createInfo);
 
         void Update(uint32 time) override;
+
+        void Heartbeat() override;
 
         bool IsImmunedToSpellEffect(SpellInfo const* spellInfo, SpellEffectInfo const& spellEffectInfo, WorldObject const* caster, bool requireImmunityPurgesEffectAttribute = false) const override;
 
@@ -1234,6 +1273,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         Pet* GetPet() const;
         Pet* SummonPet(uint32 entry, Optional<PetSaveMode> slot, float x, float y, float z, float ang, uint32 despwtime, bool* isNew = nullptr);
         void RemovePet(Pet* pet, PetSaveMode mode, bool returnreagent = false);
+        void DeletePetFromDB(uint32 petNumber);
         void SendTameFailure(PetTameResult result);
 
         // pet auras
@@ -1358,7 +1398,6 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         Item* GetUseableItemByPos(uint8 bag, uint8 slot) const;
         Bag*  GetBagByPos(uint8 slot) const;
         std::vector<Item*> GetCraftingReagentItemsToDeposit();
-        uint32 GetFreeInventorySpace() const;
         Item* GetWeaponForAttack(WeaponAttackType attackType, bool useable = false) const;
         Item* GetShield(bool useable = false) const;
         Item* GetChildItemByGuid(ObjectGuid guid) const;
@@ -1381,6 +1420,20 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void SetInventorySlotCount(uint8 slots);
         uint8 GetBankBagSlotCount() const { return m_activePlayerData->NumBankSlots; }
         void SetBankBagSlotCount(uint8 count) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::NumBankSlots), count); }
+        bool IsBackpackAutoSortDisabled() const { return m_activePlayerData->BackpackAutoSortDisabled; }
+        void SetBackpackAutoSortDisabled(bool disabled) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BackpackAutoSortDisabled), disabled); }
+        bool IsBackpackSellJunkDisabled() const { return m_activePlayerData->BackpackSellJunkDisabled; }
+        void SetBackpackSellJunkDisabled(bool disabled) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BackpackSellJunkDisabled), disabled); }
+        bool IsBankAutoSortDisabled() const { return m_activePlayerData->BankAutoSortDisabled; }
+        void SetBankAutoSortDisabled(bool disabled) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BankAutoSortDisabled), disabled); }
+        EnumFlag<BagSlotFlags> GetBagSlotFlags(uint32 bagIndex) const { return static_cast<BagSlotFlags>(m_activePlayerData->BagSlotFlags[bagIndex]); }
+        void SetBagSlotFlag(uint32 bagIndex, EnumFlag<BagSlotFlags> flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BagSlotFlags, bagIndex), flags.AsUnderlyingType()); }
+        void RemoveBagSlotFlag(uint32 bagIndex, EnumFlag<BagSlotFlags> flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BagSlotFlags, bagIndex), flags.AsUnderlyingType()); }
+        void ReplaceAllBagSlotFlags(uint32 bagIndex, EnumFlag<BagSlotFlags> flags) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BagSlotFlags, bagIndex), flags.AsUnderlyingType()); }
+        EnumFlag<BagSlotFlags> GetBankBagSlotFlags(uint32 bagIndex) const { return static_cast<BagSlotFlags>(m_activePlayerData->BankBagSlotFlags[bagIndex]); }
+        void SetBankBagSlotFlag(uint32 bagIndex, EnumFlag<BagSlotFlags> flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BankBagSlotFlags, bagIndex), flags.AsUnderlyingType()); }
+        void RemoveBankBagSlotFlag(uint32 bagIndex, EnumFlag<BagSlotFlags> flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BankBagSlotFlags, bagIndex), flags.AsUnderlyingType()); }
+        void ReplaceAllBankBagSlotFlags(uint32 bagIndex, EnumFlag<BagSlotFlags> flags) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::BankBagSlotFlags, bagIndex), flags.AsUnderlyingType()); }
         bool HasItemCount(uint32 item, uint32 count = 1, bool inBankAlso = false) const;
         bool HasItemFitToSpellRequirements(SpellInfo const* spellInfo, Item const* ignoreItem = nullptr) const;
         bool CanNoReagentCast(SpellInfo const* spellInfo) const;
@@ -1922,6 +1975,9 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void SetLastPotionId(uint32 item_id) { m_lastPotionId = item_id; }
         void UpdatePotionCooldown(Spell* spell = nullptr);
 
+        float GetEmpowerMinHoldStagePercent() const { return m_empowerMinHoldStagePercent; }
+        void SetEmpowerMinHoldStagePercent(float empowerMinHoldStagePercent) { m_empowerMinHoldStagePercent = empowerMinHoldStagePercent; }
+
         void SetResurrectRequestData(WorldObject const* caster, uint32 health, uint32 mana, uint32 appliedAura);
         void ClearResurrectRequestData()
         {
@@ -2219,8 +2275,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void SetSkillTempBonus(uint32 pos, uint16 bonus) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::Skill).ModifyValue(&UF::SkillInfo::SkillTempBonus, pos), bonus); }
         void SetSkillPermBonus(uint32 pos, uint16 bonus) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::Skill).ModifyValue(&UF::SkillInfo::SkillPermBonus, pos), bonus); }
 
-        WorldLocation& GetTeleportDest() { return m_teleport_dest; }
-        Optional<uint32> GetTeleportDestInstanceId() const { return m_teleport_instanceId; }
+        TeleportLocation& GetTeleportDest() { return m_teleport_dest; }
         uint32 GetTeleportOptions() const { return m_teleport_options; }
         bool IsBeingTeleported() const { return IsBeingTeleportedNear() || IsBeingTeleportedFar(); }
         bool IsBeingTeleportedNear() const { return mSemaphoreTeleport_Near; }
@@ -2230,10 +2285,12 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void SetSemaphoreTeleportFar(bool semphsetting) { mSemaphoreTeleport_Far = semphsetting; }
         void ProcessDelayedOperations();
 
-        void CheckAreaExploreAndOutdoor(void);
+        void CheckAreaExplore();
         void AddExploredZones(uint32 pos, uint64 mask);
         void RemoveExploredZones(uint32 pos, uint64 mask);
         bool HasExploredZone(uint32 areaId) const;
+
+        void CheckOutdoorsAuraRequirements();
 
         static Team TeamForRace(uint8 race);
         static TeamId TeamIdForRace(uint8 race);
@@ -2750,8 +2807,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void RemovePlayerFlagEx(PlayerFlagsEx flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::PlayerFlagsEx), flags); }
         void ReplaceAllPlayerFlagsEx(PlayerFlagsEx flags) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::PlayerFlagsEx), flags); }
 
-        void SetAverageItemLevelTotal(float newItemLevel) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::AvgItemLevel, 0), newItemLevel); }
-        void SetAverageItemLevelEquipped(float newItemLevel) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::AvgItemLevel, 1), newItemLevel); }
+        void SetAverageItemLevel(float newItemLevel, AvgItemLevelCategory category) { SetUpdateFieldValue(m_values.ModifyValue(&Player::m_playerData).ModifyValue(&UF::PlayerData::AvgItemLevel, uint32(category)), newItemLevel); }
 
         uint32 GetCustomizationChoice(uint32 chrCustomizationOptionId) const
         {
@@ -2880,7 +2936,6 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         GuidList WhisperList;
         TimePoint m_regenInterruptTimestamp;
         uint32 m_regenTimerCount;
-        uint32 m_foodEmoteTimerCount;
         std::array<float, MAX_POWERS_PER_CLASS> m_powerFraction;
         uint32 m_contestedPvPTimer;
 
@@ -3047,6 +3102,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         std::unordered_map<uint32 /*overridenSpellId*/, std::unordered_set<uint32> /*newSpellId*/> m_overrideSpells;
         uint32 m_lastPotionId;                              // last used health/mana potion in combat, that block next potion use
         std::unordered_map<uint32, StoredAuraTeleportLocation> m_storedAuraTeleportLocations;
+        float m_empowerMinHoldStagePercent;
 
         SpecializationInfo _specializationInfo;
 
@@ -3142,8 +3198,6 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
 
         std::array<std::unique_ptr<CUFProfile>, MAX_CUF_PROFILES> _CUFProfiles;
 
-        TimeTracker m_groupUpdateTimer;
-
     private:
         // internal common parts for CanStore/StoreItem functions
         InventoryResult CanStoreItem_InSpecificSlot(uint8 bag, uint8 slot, ItemPosCountVec& dest, ItemTemplate const* pProto, uint32& count, bool swap, Item* pSrcItem) const;
@@ -3179,8 +3233,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         uint8 m_MirrorTimerFlagsLast;
 
         // Current teleport data
-        WorldLocation m_teleport_dest;
-        Optional<uint32> m_teleport_instanceId;
+        TeleportLocation m_teleport_dest;
         TeleportToOptions m_teleport_options;
         bool mSemaphoreTeleport_Near;
         bool mSemaphoreTeleport_Far;

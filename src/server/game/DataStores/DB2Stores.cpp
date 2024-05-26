@@ -28,6 +28,7 @@
 #include "Timer.h"
 #include "Util.h"
 #include "World.h"
+#include <boost/filesystem/directory.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <array>
 #include <bitset>
@@ -296,6 +297,8 @@ DB2Storage<SpellCooldownsEntry>                 sSpellCooldownsStore("SpellCoold
 DB2Storage<SpellDurationEntry>                  sSpellDurationStore("SpellDuration.db2", &SpellDurationLoadInfo::Instance);
 DB2Storage<SpellEffectEntry>                    sSpellEffectStore("SpellEffect.db2", &SpellEffectLoadInfo::Instance);
 DB2Storage<SpellEquippedItemsEntry>             sSpellEquippedItemsStore("SpellEquippedItems.db2", &SpellEquippedItemsLoadInfo::Instance);
+DB2Storage<SpellEmpowerEntry>                   sSpellEmpowerStore("SpellEmpower.db2", &SpellEmpowerLoadInfo::Instance);
+DB2Storage<SpellEmpowerStageEntry>              sSpellEmpowerStageStore("SpellEmpowerStage.db2", &SpellEmpowerStageLoadInfo::Instance);
 DB2Storage<SpellFocusObjectEntry>               sSpellFocusObjectStore("SpellFocusObject.db2", &SpellFocusObjectLoadInfo::Instance);
 DB2Storage<SpellInterruptsEntry>                sSpellInterruptsStore("SpellInterrupts.db2", &SpellInterruptsLoadInfo::Instance);
 DB2Storage<SpellItemEnchantmentEntry>           sSpellItemEnchantmentStore("SpellItemEnchantment.db2", &SpellItemEnchantmentLoadInfo::Instance);
@@ -461,7 +464,7 @@ namespace
     std::unordered_map<uint32 /*chrCustomizationReqId*/, std::vector<std::pair<uint32 /*chrCustomizationOptionId*/, std::vector<uint32>>>> _chrCustomizationRequiredChoices;
     ChrSpecializationByIndexContainer _chrSpecializationsByIndex;
     std::unordered_map<int32, ConditionalChrModelEntry const*> _conditionalChrModelsByChrModelId;
-    std::unordered_multimap<uint32, ConditionalContentTuningEntry const*> _conditionalContentTuning;
+    std::unordered_map<uint32 /*contentTuningId*/, std::vector<ConditionalContentTuningEntry const*>> _conditionalContentTuning;
     std::unordered_set<std::pair<uint32, int32>> _contentTuningLabels;
     std::unordered_multimap<uint32, CurrencyContainerEntry const*> _currencyContainers;
     CurvePointsContainer _curvePoints;
@@ -898,6 +901,8 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sSpellDurationStore);
     LOAD_DB2(sSpellEffectStore);
     LOAD_DB2(sSpellEquippedItemsStore);
+    LOAD_DB2(sSpellEmpowerStore);
+    LOAD_DB2(sSpellEmpowerStageStore);
     LOAD_DB2(sSpellFocusObjectStore);
     LOAD_DB2(sSpellInterruptsStore);
     LOAD_DB2(sSpellItemEnchantmentStore);
@@ -979,15 +984,13 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sWorldMapOverlayStore);
     LOAD_DB2(sWorldStateExpressionStore);
 
-#undef LOAD_DB2
-
     // error checks
     if (!loadErrors.empty())
     {
         sLog->SetSynchronous(); // server will shut down after this, so set sync logging to prevent messages from getting lost
 
         for (std::string const& error : loadErrors)
-            TC_LOG_ERROR("misc", "{}", error);
+            TC_LOG_FATAL("misc", "{}", error);
 
         return 0;
     }
@@ -1001,8 +1004,8 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
         !sMapStore.LookupEntry(2708) ||                      // last map added in 10.2.5 (53007)
         !sSpellNameStore.LookupEntry(438878))                // last spell added in 10.2.5 (53007)
     {
-        TC_LOG_ERROR("misc", "You have _outdated_ DB2 files. Please extract correct versions from current using client.");
-        exit(1);
+        TC_LOG_FATAL("misc", "You have _outdated_ DB2 files. Please extract correct versions from current using client.");
+        return 0;
     }
 
     for (AreaGroupMemberEntry const* areaGroupMember : sAreaGroupMemberStore)
@@ -1217,8 +1220,13 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     for (ConditionalChrModelEntry const* conditionalChrModel : sConditionalChrModelStore)
         _conditionalChrModelsByChrModelId[conditionalChrModel->ChrModelID] = conditionalChrModel;
 
-    for (ConditionalContentTuningEntry const* conditionalContentTuning : sConditionalContentTuningStore)
-        _conditionalContentTuning.emplace(conditionalContentTuning->ParentContentTuningID, conditionalContentTuning);
+    {
+        for (ConditionalContentTuningEntry const* conditionalContentTuning : sConditionalContentTuningStore)
+            _conditionalContentTuning[conditionalContentTuning->ParentContentTuningID].push_back(conditionalContentTuning);
+
+        for (auto& [parentContentTuningId, conditionalContentTunings] : _conditionalContentTuning)
+            std::ranges::sort(conditionalContentTunings, std::greater(), &ConditionalContentTuningEntry::OrderIndex);
+    }
 
     for (ContentTuningXExpectedEntry const* contentTuningXExpectedStat : sContentTuningXExpectedStore)
         if (sExpectedStatModStore.LookupEntry(contentTuningXExpectedStat->ExpectedStatModID))
@@ -2109,9 +2117,10 @@ ChrSpecializationEntry const* DB2Manager::GetDefaultChrSpecializationForClass(ui
 
 uint32 DB2Manager::GetRedirectedContentTuningId(uint32 contentTuningId, uint32 redirectFlag) const
 {
-    for (auto [_, conditionalContentTuning] : Trinity::Containers::MapEqualRange(_conditionalContentTuning, contentTuningId))
-        if (conditionalContentTuning->RedirectFlag & redirectFlag)
-            return conditionalContentTuning->RedirectContentTuningID;
+    if (std::vector<ConditionalContentTuningEntry const*> const* conditionalContentTunings = Trinity::Containers::MapGetValuePtr(_conditionalContentTuning, contentTuningId))
+        for (ConditionalContentTuningEntry const* conditionalContentTuning : *conditionalContentTunings)
+            if (conditionalContentTuning->RedirectFlag & redirectFlag)
+                return conditionalContentTuning->RedirectContentTuningID;
 
     return contentTuningId;
 }
@@ -2129,10 +2138,12 @@ Optional<ContentTuningLevels> DB2Manager::GetContentTuningData(uint32 contentTun
     {
         switch (type)
         {
-            case ContentTuningCalcType::PlusOne:
+            case ContentTuningCalcType::MinLevel:
                 return 1;
-            case ContentTuningCalcType::PlusMaxLevelForExpansion:
+            case ContentTuningCalcType::MaxLevel:
                 return GetMaxLevelForExpansion(sWorld->getIntConfig(CONFIG_EXPANSION));
+            case ContentTuningCalcType::PrevExpansionMaxLevel:
+                return GetMaxLevelForExpansion(std::max<int32>(sWorld->getIntConfig(CONFIG_EXPANSION) - 1, 0));
             default:
                 break;
         }
