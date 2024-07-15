@@ -24,6 +24,7 @@
 #include "CombatLogPackets.h"
 #include "Common.h"
 #include "Creature.h"
+#include "CreatureGroups.h"
 #include "DB2Stores.h"
 #include "GameTime.h"
 #include "GridNotifiersImpl.h"
@@ -1983,6 +1984,38 @@ TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropert
     return summon;
 }
 
+template <std::invocable<TempSummonData const&> SummonCreature>
+static void SummonCreatureGroup(uint32 summonerId, SummonerType summonerType, uint8 group, std::list<TempSummon*>* summoned, SummonCreature summonCreature)
+{
+    std::vector<TempSummonData> const* data = sObjectMgr->GetSummonGroup(summonerId, summonerType, group);
+    if (!data)
+    {
+        TC_LOG_WARN("scripts", "Summoner {} type {} tried to summon non-existing summon group {}.", summonerId, summonerType, group);
+        return;
+    }
+
+    std::vector<TempSummon*> summons;
+    summons.reserve(data->size());
+
+    for (TempSummonData const& tempSummonData : *data)
+        if (TempSummon* summon = summonCreature(tempSummonData))
+            summons.push_back(summon);
+
+    CreatureGroup* creatureGroup = new CreatureGroup(0);
+    for (TempSummon* summon : summons)
+    {
+        if (!summon->IsInWorld())   // evil script might despawn a summon
+            continue;
+
+        creatureGroup->AddMember(summon);
+        if (summoned)
+            summoned->push_back(summon);
+    }
+
+    if (creatureGroup->IsEmpty())
+        delete creatureGroup;
+}
+
 /**
 * Summons group of creatures.
 *
@@ -1992,14 +2025,10 @@ TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropert
 
 void Map::SummonCreatureGroup(uint8 group, std::list<TempSummon*>* list /*= nullptr*/)
 {
-    std::vector<TempSummonData> const* data = sObjectMgr->GetSummonGroup(GetId(), SUMMONER_TYPE_MAP, group);
-    if (!data)
-        return;
-
-    for (std::vector<TempSummonData>::const_iterator itr = data->begin(); itr != data->end(); ++itr)
-        if (TempSummon* summon = SummonCreature(itr->entry, itr->pos, nullptr, itr->time))
-            if (list)
-                list->push_back(summon);
+    ::SummonCreatureGroup(GetId(), SUMMONER_TYPE_MAP, group, list, [&](TempSummonData const& tempSummonData)
+    {
+        return SummonCreature(tempSummonData.entry, tempSummonData.pos, nullptr, tempSummonData.time);
+    });
 }
 
 ZoneScript* WorldObject::FindZoneScript() const
@@ -2148,17 +2177,10 @@ void WorldObject::SummonCreatureGroup(uint8 group, std::list<TempSummon*>* list 
 {
     ASSERT((GetTypeId() == TYPEID_GAMEOBJECT || GetTypeId() == TYPEID_UNIT) && "Only GOs and creatures can summon npc groups!");
 
-    std::vector<TempSummonData> const* data = sObjectMgr->GetSummonGroup(GetEntry(), GetTypeId() == TYPEID_GAMEOBJECT ? SUMMONER_TYPE_GAMEOBJECT : SUMMONER_TYPE_CREATURE, group);
-    if (!data)
+    ::SummonCreatureGroup(GetEntry(), GetTypeId() == TYPEID_GAMEOBJECT ? SUMMONER_TYPE_GAMEOBJECT : SUMMONER_TYPE_CREATURE, group, list, [&](TempSummonData const& tempSummonData)
     {
-        TC_LOG_WARN("scripts", "{} ({}) tried to summon non-existing summon group {}.", GetName(), GetGUID().ToString(), group);
-        return;
-    }
-
-    for (std::vector<TempSummonData>::const_iterator itr = data->begin(); itr != data->end(); ++itr)
-        if (TempSummon* summon = SummonCreature(itr->entry, itr->pos, itr->type, Milliseconds(itr->time)))
-            if (list)
-                list->push_back(summon);
+        return SummonCreature(tempSummonData.entry, tempSummonData.pos, tempSummonData.type, tempSummonData.time);
+    });
 }
 
 Creature* WorldObject::FindNearestCreature(uint32 entry, float range, bool alive) const
@@ -2497,6 +2519,8 @@ void WorldObject::ModSpellCastTime(SpellInfo const* spellInfo, int32& castTime, 
     else if (!(spellInfo->HasAttribute(SPELL_ATTR0_IS_ABILITY) || spellInfo->HasAttribute(SPELL_ATTR0_IS_TRADESKILL) || spellInfo->HasAttribute(SPELL_ATTR3_IGNORE_CASTER_MODIFIERS)) &&
         ((GetTypeId() == TYPEID_PLAYER && spellInfo->SpellFamilyName) || GetTypeId() == TYPEID_UNIT))
         castTime = unitCaster->CanInstantCast() ? 0 : int32(float(castTime) * unitCaster->m_unitData->ModCastingSpeed);
+    else if (spellInfo->HasAttribute(SPELL_ATTR0_IS_ABILITY) && spellInfo->HasAttribute(SPELL_ATTR9_HASTE_AFFECTS_MELEE_ABILITY_CASTTIME))
+        castTime = int32(float(castTime) * unitCaster->m_modAttackSpeedPct[BASE_ATTACK]);
     else if (spellInfo->HasAttribute(SPELL_ATTR0_USES_RANGED_SLOT) && !spellInfo->HasAttribute(SPELL_ATTR2_AUTO_REPEAT))
         castTime = int32(float(castTime) * unitCaster->m_modAttackSpeedPct[RANGED_ATTACK]);
     else if (IsPartOfSkillLine(SKILL_COOKING, spellInfo->Id) && unitCaster->HasAura(67556)) // cooking with Chef Hat.
@@ -2642,7 +2666,7 @@ SpellMissInfo WorldObject::SpellHitResult(Unit* victim, SpellInfo const* spellIn
 
     // Damage immunity is only checked if the spell has damage effects, this immunity must not prevent aura apply
     // returns SPELL_MISS_IMMUNE in that case, for other spells, the SMSG_SPELL_GO must show hit
-    if (spellInfo->HasOnlyDamageEffects() && victim->IsImmunedToDamage(spellInfo))
+    if (spellInfo->HasOnlyDamageEffects() && victim->IsImmunedToDamage(this, spellInfo))
         return SPELL_MISS_IMMUNE;
 
     // All positive spells can`t miss

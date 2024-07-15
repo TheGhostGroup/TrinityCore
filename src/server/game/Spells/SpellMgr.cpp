@@ -2523,7 +2523,11 @@ void SpellMgr::LoadSpellInfoStore()
             case SPELL_AURA_ADD_PCT_MODIFIER:
             case SPELL_AURA_ADD_PCT_MODIFIER_BY_SPELL_LABEL:
             case SPELL_AURA_ADD_FLAT_MODIFIER_BY_SPELL_LABEL:
-                ASSERT(effect->EffectMiscValue[0] < MAX_SPELLMOD, "MAX_SPELLMOD must be at least %d", effect->EffectMiscValue[0] + 1);
+                if (effect->EffectMiscValue[0] >= MAX_SPELLMOD)
+                {
+                    TC_LOG_ERROR("server.loading", "Invalid spell modifier type {} found on spell {} effect index {}, consider increasing MAX_SPELLMOD",
+                        effect->EffectMiscValue[0], effect->SpellID, effect->EffectIndex);
+                }
                 break;
             default:
                 break;
@@ -4745,6 +4749,18 @@ void SpellMgr::LoadSpellInfoCorrections()
     // ENDOF STORMSONG VALLEY SPELLS
 
     //
+    // KINGS REST SPELLS
+    //
+
+    // Fixate
+    ApplySpellFix({ 269936 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->Attributes |= SPELL_ATTR0_AURA_IS_DEBUFF;
+    });
+
+    // ENDOF KINGS REST SPELLS
+
+    //
     // SEPULCHER OF THE FIRST ONES
     //
 
@@ -4840,12 +4856,23 @@ void SpellMgr::LoadSpellInfoCorrections()
 
     // ENDOF THE AZURE VAULT SPELLS
     //
+
     // Summon Master Li Fei
     ApplySpellFix({ 102445 }, [](SpellInfo* spellInfo)
     {
         ApplySpellEffectFix(spellInfo, EFFECT_0, [](SpellEffectInfo* spellEffectInfo)
         {
             spellEffectInfo->TargetA = SpellImplicitTargetInfo(TARGET_DEST_DB);
+        });
+    });
+
+    // Summon Amberleaf Troublemaker
+    ApplySpellFix({ 114698 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->DurationEntry = sSpellDurationStore.LookupEntry(4); // 2mins
+        ApplySpellEffectFix(spellInfo, EFFECT_0, [](SpellEffectInfo* spellEffectInfo)
+        {
+            spellEffectInfo->TargetA = SpellImplicitTargetInfo(TARGET_DEST_DEST);
         });
     });
 
