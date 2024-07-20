@@ -288,7 +288,10 @@ void Transport::RemovePassenger(WorldObject* passenger)
         TC_LOG_DEBUG("entities.transport", "Object %s removed from transport %s.", passenger->GetName().c_str(), GetName().c_str());
 
         if (Player* plr = passenger->ToPlayer())
+        {
             sScriptMgr->OnRemovePassenger(this, plr);
+            plr->SetFallInformation(0, plr->GetPositionZ());
+        }
     }
 }
 
@@ -408,22 +411,22 @@ TempSummon* Transport::SummonPassenger(uint32 entry, Position const& pos, TempSu
             case SUMMON_CATEGORY_ALLY:
             case SUMMON_CATEGORY_UNK:
             {
-                switch (properties->Title)
+                switch (SummonTitle(properties->Title))
                 {
-                    case SUMMON_TYPE_MINION:
-                    case SUMMON_TYPE_GUARDIAN:
-                    case SUMMON_TYPE_GUARDIAN2:
+                    case SummonTitle::Minion:
+                    case SummonTitle::Guardian:
+                    case SummonTitle::Runeblade:
                         mask = UNIT_MASK_GUARDIAN;
                         break;
-                    case SUMMON_TYPE_TOTEM:
-                    case SUMMON_TYPE_LIGHTWELL:
+                    case SummonTitle::Totem:
+                    case SummonTitle::Lightwell:
                         mask = UNIT_MASK_TOTEM;
                         break;
-                    case SUMMON_TYPE_VEHICLE:
-                    case SUMMON_TYPE_VEHICLE2:
+                    case SummonTitle::Vehicle:
+                    case SummonTitle::Mount:
                         mask = UNIT_MASK_SUMMON;
                         break;
-                    case SUMMON_TYPE_MINIPET:
+                    case SummonTitle::Companion:
                         mask = UNIT_MASK_MINION;
                         break;
                     default:
@@ -718,8 +721,11 @@ void Transport::UpdatePassengerPositions(PassengerSet& passengers)
             }
             case TYPEID_PLAYER:
                 //relocate only passengers in world and skip any player that might be still logging in/teleporting
-                if (passenger->IsInWorld())
+                if (passenger->IsInWorld() && !passenger->ToPlayer()->IsBeingTeleported())
+                {
                     GetMap()->PlayerRelocation(passenger->ToPlayer(), x, y, z, o);
+                    passenger->ToPlayer()->SetFallInformation(0, passenger->GetPositionZ());
+                }
                 break;
             case TYPEID_GAMEOBJECT:
                 GetMap()->GameObjectRelocation(passenger->ToGameObject(), x, y, z, o, false);

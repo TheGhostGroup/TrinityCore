@@ -1685,6 +1685,17 @@ bool ScriptMgr::OnItemRemove(Player* player, Item* item)
     return tmpscript->OnRemove(player, item);
 }
 
+bool ScriptMgr::OnCastItemCombatSpell(Player* player, Unit* victim, SpellInfo const* spellInfo, Item* item)
+{
+    ASSERT(player);
+    ASSERT(victim);
+    ASSERT(spellInfo);
+    ASSERT(item);
+
+    GET_SCRIPT_RET(ItemScript, item->GetScriptId(), tmpscript, true);
+    return tmpscript->OnCastItemCombatSpell(player, victim, spellInfo, item);
+}
+
 bool ScriptMgr::OnDummyEffect(Unit* caster, uint32 spellId, SpellEffIndex effIndex, Creature* target)
 {
     ASSERT(caster);
@@ -2294,6 +2305,11 @@ void ScriptMgr::OnQuestStatusChange(Player* player, uint32 questId)
     FOREACH_SCRIPT(PlayerScript)->OnQuestStatusChange(player, questId);
 }
 
+void ScriptMgr::OnPlayerRepop(Player* player)
+{
+    FOREACH_SCRIPT(PlayerScript)->OnPlayerRepop(player);
+}
+
 void ScriptMgr::OnMovieComplete(Player* player, uint32 movieId)
 {
     FOREACH_SCRIPT(PlayerScript)->OnMovieComplete(player, movieId);
@@ -2448,10 +2464,10 @@ void ScriptMgr::ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage)
     FOREACH_SCRIPT(PlayerScript)->ModifyMeleeDamage(target, attacker, damage);
 }
 
-void ScriptMgr::ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage)
+void ScriptMgr::ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* spellInfo)
 {
-    FOREACH_SCRIPT(UnitScript)->ModifySpellDamageTaken(target, attacker, damage);
-    FOREACH_SCRIPT(PlayerScript)->ModifySpellDamageTaken(target, attacker, damage);
+    FOREACH_SCRIPT(UnitScript)->ModifySpellDamageTaken(target, attacker, damage, spellInfo);
+    FOREACH_SCRIPT(PlayerScript)->ModifySpellDamageTaken(target, attacker, damage, spellInfo);
 }
 
 // Conversation

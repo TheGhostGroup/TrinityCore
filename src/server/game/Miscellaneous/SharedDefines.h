@@ -87,9 +87,6 @@ enum Expansions
     EXPANSION_LEGION                   = 6,
     MAX_EXPANSIONS,
 
-    // future expansion
-    EXPANSION_BATTLE_FOR_AZEROTH       = 7,
-
     MAX_ACCOUNT_EXPANSIONS
 };
 
@@ -126,81 +123,6 @@ enum Gender
     GENDER_FEMALE                      =  1,
     GENDER_NONE                        =  2
 };
-
-// ChrRaces.dbc (6.0.2.18988)
-enum Races
-{
-    RACE_NONE               = 0,
-    RACE_HUMAN                  = 1,
-    RACE_ORC                    = 2,
-    RACE_DWARF                  = 3,
-    RACE_NIGHTELF               = 4,
-    RACE_UNDEAD_PLAYER          = 5,
-    RACE_TAUREN                 = 6,
-    RACE_GNOME                  = 7,
-    RACE_TROLL                  = 8,
-    RACE_GOBLIN                 = 9,
-    RACE_BLOODELF               = 10,
-    RACE_DRAENEI                = 11,
-    //RACE_FEL_ORC            = 12,
-    //RACE_NAGA               = 13,
-    //RACE_BROKEN             = 14,
-    //RACE_SKELETON           = 15,
-    //RACE_VRYKUL             = 16,
-    //RACE_TUSKARR            = 17,
-    //RACE_FOREST_TROLL       = 18,
-    //RACE_TAUNKA             = 19,
-    //RACE_NORTHREND_SKELETON = 20,
-    //RACE_ICE_TROLL          = 21,
-    RACE_WORGEN                 = 22,
-    //RACE_GILNEAN            = 23
-    RACE_PANDAREN_NEUTRAL       = 24,
-    RACE_PANDAREN_ALLIANCE      = 25,
-    RACE_PANDAREN_HORDE         = 26,
-    RACE_NIGHTBORNE             = 27,
-    RACE_HIGHMOUNTAIN_TAUREN    = 28,
-    RACE_VOID_ELF               = 29,
-    RACE_LIGHTFORGED_DRAENEI    = 30
-};
-
-// max+1 for player race
-#define MAX_RACES         31
-
-#define RACEMASK_ALL_PLAYABLE      \
-    ((1<<(RACE_HUMAN-1))         | \
-     (1<<(RACE_ORC-1))           | \
-     (1<<(RACE_DWARF-1))         | \
-     (1<<(RACE_NIGHTELF-1))      | \
-     (1<<(RACE_UNDEAD_PLAYER-1)) | \
-     (1<<(RACE_TAUREN-1))        | \
-     (1<<(RACE_GNOME-1))         | \
-     (1<<(RACE_TROLL-1))         | \
-     (1<<(RACE_BLOODELF-1))      | \
-     (1<<(RACE_DRAENEI-1))       | \
-     (1<<(RACE_GOBLIN-1))        | \
-     (1<<(RACE_WORGEN-1))        | \
-     (1<<(RACE_PANDAREN_NEUTRAL-1))  |\
-     (1<<(RACE_PANDAREN_ALLIANCE-1)) |\
-     (1<<(RACE_PANDAREN_HORDE-1))|\
-     (1<<(RACE_NIGHTBORNE-1))|\
-     (1<<(RACE_HIGHMOUNTAIN_TAUREN-1))|\
-     (1<<(RACE_VOID_ELF-1))|\
-     (1<<(RACE_LIGHTFORGED_DRAENEI-1)))
-
-#define RACEMASK_NEUTRAL (1<<(RACE_PANDAREN_NEUTRAL-1))
-
-#define RACEMASK_ALLIANCE     \
-    ((1<<(RACE_HUMAN-1))    | \
-     (1<<(RACE_DWARF-1))    | \
-     (1<<(RACE_NIGHTELF-1)) | \
-     (1<<(RACE_GNOME-1))    | \
-     (1<<(RACE_DRAENEI-1))  | \
-     (1<<(RACE_WORGEN-1))   | \
-     (1<<(RACE_PANDAREN_ALLIANCE-1)) |\
-     (1<<(RACE_VOID_ELF-1)) |\
-     (1<<(RACE_LIGHTFORGED_DRAENEI-1)))
-
-#define RACEMASK_HORDE RACEMASK_ALL_PLAYABLE & ~RACEMASK_ALLIANCE
 
 // Class value is index in ChrClasses.dbc
 enum Classes : uint8
@@ -2289,7 +2211,7 @@ enum Targets
     TARGET_UNK_126                     = 126,
     TARGET_UNK_127                     = 127,
     TARGET_UNK_128                     = 128,
-    TARGET_UNK_129                     = 129,
+    TARGET_UNIT_CONE_ENTRY_129         = 129,
     TARGET_UNK_130                     = 130,
     TARGET_UNK_131                     = 131,
     TARGET_UNK_132                     = 132,
@@ -4488,6 +4410,8 @@ enum CorpseDynFlags
     CORPSE_DYNFLAG_LOOTABLE        = 0x0001
 };
 
+#define PLAYER_CORPSE_LOOT_ENTRY 1
+
 enum WeatherType
 {
     WEATHER_TYPE_FINE       = 0,
@@ -4667,22 +4591,51 @@ enum SummonCategory
                                      // uses this category
 };
 
-enum SummonType
+enum class SummonTitle : int32
 {
-    SUMMON_TYPE_NONE        = 0,
-    SUMMON_TYPE_PET         = 1,
-    SUMMON_TYPE_GUARDIAN    = 2,
-    SUMMON_TYPE_MINION      = 3,
-    SUMMON_TYPE_TOTEM       = 4,
-    SUMMON_TYPE_MINIPET     = 5,
-    SUMMON_TYPE_GUARDIAN2   = 6,
-    SUMMON_TYPE_WILD2       = 7,
-    SUMMON_TYPE_WILD3       = 8,    // Related to phases and DK prequest line (3.3.5a)
-    SUMMON_TYPE_VEHICLE     = 9,
-    SUMMON_TYPE_VEHICLE2    = 10,   // Oculus and Argent Tournament vehicles (3.3.5a)
-    SUMMON_TYPE_LIGHTWELL   = 11,
-    SUMMON_TYPE_JEEVES      = 12,
-    SUMMON_TYPE_UNK13       = 13
+    None                = 0,
+    Pet                 = 1,
+    Guardian            = 2,
+    Minion              = 3,
+    Totem               = 4,
+    Companion           = 5,
+    Runeblade           = 6,
+    Construct           = 7,
+    Opponent            = 8,    // Related to phases and DK prequest line (3.3.5a)
+    Vehicle             = 9,
+    Mount               = 10,   // Oculus and Argent Tournament vehicles (3.3.5a)
+    Lightwell           = 11,
+    Butler              = 12,
+    aka                 = 13,
+    Gateway             = 14,
+    Hatred              = 15,
+    Statue              = 16,
+    Spirit              = 17,
+    WarBanner           = 18,
+    Heartwarmer         = 19,
+    HiredBy             = 20,
+    PurchasedBy         = 21,
+    Pride               = 22,
+    TwistedImage        = 23,
+    NoodleCart          = 24,
+    InnerDemon          = 25,
+    Bodyguard           = 26,
+    Name                = 27,
+    Squire              = 28,
+    Champion            = 29,
+    TheBetrayer         = 30,
+    EruptingReflection  = 31,
+    HopelessReflection  = 32,
+    MalignantReflection = 33,
+    WailingReflection   = 34,
+    Assistant           = 35,
+    Enforcer            = 36,
+    Recruit             = 37,
+    Admirer             = 38,
+    EvilTwin            = 39,
+    Greed               = 40,
+    LostMind            = 41,
+    ServantOfNZoth      = 44
 };
 
 enum EventId
@@ -5173,6 +5126,14 @@ enum DiminishingLevels
     DIMINISHING_LEVEL_IMMUNE        = 3,
     DIMINISHING_LEVEL_4             = 3,
     DIMINISHING_LEVEL_TAUNT_IMMUNE  = 4
+};
+
+enum WeaponAttackType : uint8
+{
+    BASE_ATTACK   = 0,
+    OFF_ATTACK    = 1,
+    RANGED_ATTACK = 2,
+    MAX_ATTACK
 };
 
 enum TokenResult

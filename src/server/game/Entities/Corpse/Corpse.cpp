@@ -16,6 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "CharacterCache.h"
 #include "Common.h"
 #include "Corpse.h"
 #include "DatabaseEnv.h"
@@ -27,6 +28,7 @@
 #include "Player.h"
 #include "UpdateData.h"
 #include "World.h"
+#include <sstream>
 
 Corpse::Corpse(CorpseType type) : WorldObject(type != CORPSE_BONES), m_type(type)
 {
@@ -40,8 +42,7 @@ Corpse::Corpse(CorpseType type) : WorldObject(type != CORPSE_BONES), m_type(type
 
     m_time = time(NULL);
 
-    lootForBody = false;
-    lootRecipient = NULL;
+    lootRecipient = nullptr;
 }
 
 Corpse::~Corpse() { }
@@ -98,11 +99,11 @@ bool Corpse::Create(ObjectGuid::LowType guidlow, Player* owner)
 void Corpse::SaveToDB()
 {
     // prevent DB data inconsistence problems and duplicates
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
     DeleteFromDB(trans);
 
     uint16 index = 0;
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CORPSE);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CORPSE);
     stmt->setUInt64(index++, GetOwnerGUID().GetCounter());                            // guid
     stmt->setFloat (index++, GetPositionX());                                         // posX
     stmt->setFloat (index++, GetPositionY());                                         // posY
@@ -132,14 +133,14 @@ void Corpse::SaveToDB()
     CharacterDatabase.CommitTransaction(trans);
 }
 
-void Corpse::DeleteFromDB(SQLTransaction& trans)
+void Corpse::DeleteFromDB(CharacterDatabaseTransaction& trans)
 {
     DeleteFromDB(GetOwnerGUID(), trans);
 }
 
-void Corpse::DeleteFromDB(ObjectGuid const& ownerGuid, SQLTransaction& trans)
+void Corpse::DeleteFromDB(ObjectGuid const& ownerGuid, CharacterDatabaseTransaction& trans)
 {
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CORPSE);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CORPSE);
     stmt->setUInt64(0, ownerGuid.GetCounter());
     CharacterDatabase.ExecuteOrAppend(trans, stmt);
 
@@ -169,7 +170,7 @@ bool Corpse::LoadCorpseFromDB(ObjectGuid::LowType guid, Field* fields)
     SetUInt32Value(CORPSE_FIELD_FLAGS, fields[9].GetUInt8());
     SetUInt32Value(CORPSE_FIELD_DYNAMIC_FLAGS, fields[10].GetUInt8());
     SetGuidValue(CORPSE_FIELD_OWNER, ObjectGuid::Create<HighGuid::Player>(fields[14].GetUInt64()));
-    if (CharacterInfo const* characterInfo = sWorld->GetCharacterInfo(GetGuidValue(CORPSE_FIELD_OWNER)))
+    if (CharacterCacheEntry const* characterInfo = sCharacterCache->GetCharacterCacheByGuid(GetGuidValue(CORPSE_FIELD_OWNER)))
         SetUInt32Value(CORPSE_FIELD_FACTIONTEMPLATE, sChrRacesStore.AssertEntry(characterInfo->Race)->FactionID);
 
     m_time = time_t(fields[11].GetUInt32());
@@ -195,7 +196,7 @@ bool Corpse::LoadCorpseFromDB(ObjectGuid::LowType guid, Field* fields)
 bool Corpse::IsExpired(time_t t) const
 {
     // Deleted character
-    if (!sWorld->GetCharacterInfo(GetOwnerGUID()))
+    if (!sCharacterCache->HasCharacterCacheEntry(GetOwnerGUID()))
         return true;
 
     if (m_type == CORPSE_BONES)

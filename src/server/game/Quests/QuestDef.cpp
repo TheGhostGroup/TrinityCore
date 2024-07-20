@@ -32,6 +32,7 @@ Quest::Quest(Field* questRecord)
     EmoteOnComplete = 0;
     _rewItemsCount = 0;
     _rewChoiceItemsCount = 0;
+    _eventIdForQuest = 0;
     _rewCurrencyCount = 0;
 
     ID = questRecord[0].GetUInt32();
@@ -120,7 +121,7 @@ Quest::Quest(Field* questRecord)
     SoundTurnIn = questRecord[102].GetUInt32();
     AreaGroupID = questRecord[103].GetUInt32();
     LimitTime = questRecord[104].GetUInt32();
-    AllowableRaces = questRecord[105].GetUInt64();
+    AllowableRaces.RawValue = questRecord[105].GetUInt64();
     QuestRewardID = questRecord[106].GetUInt32();
     Expansion = questRecord[107].GetInt32();
 

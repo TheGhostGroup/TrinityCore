@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "DBCEnums.h"
 #include "DatabaseEnvFwd.h"
+#include "RaceMask.h"
 #include "SharedDefines.h"
 #include <vector>
 
@@ -370,7 +371,7 @@ class TC_GAME_API Quest
         int32  GetQuestMaxScalingLevel() const { return MaxScalingLevel; }
         uint32 GetQuestInfoID() const { return QuestInfoID; }
         uint32 GetAllowableClasses() const { return AllowableClasses; }
-        uint64 GetAllowableRaces() const { return AllowableRaces; }
+        Trinity::RaceMask<uint64> GetAllowableRaces() const { return AllowableRaces; }
         uint32 GetRequiredSkill() const { return RequiredSkillId; }
         uint32 GetRequiredSkillValue() const { return RequiredSkillPoints; }
         uint32 GetRequiredMinRepFaction() const { return RequiredMinRepFaction; }
@@ -452,6 +453,9 @@ class TC_GAME_API Quest
         uint32 GetRewItemsCount() const { return _rewItemsCount; }
         uint32 GetRewCurrencyCount() const { return _rewCurrencyCount; }
 
+        void SetEventIdForQuest(uint16 eventId) { _eventIdForQuest = eventId; }
+        uint16 GetEventIdForQuest() const { return _eventIdForQuest; }
+
         void BuildQuestRewards(WorldPackets::Quest::QuestRewards& rewards, Player* player) const;
 
         typedef std::vector<int32> PrevQuests;
@@ -462,6 +466,7 @@ class TC_GAME_API Quest
     private:
         uint32 _rewChoiceItemsCount;
         uint32 _rewItemsCount;
+        uint16 _eventIdForQuest;
         uint32 _rewCurrencyCount;
 
     public:
@@ -520,7 +525,7 @@ class TC_GAME_API Quest
         uint32 SoundTurnIn;
         uint32 AreaGroupID;
         uint32 LimitTime;
-        uint64 AllowableRaces;
+        Trinity::RaceMask<uint64> AllowableRaces;
         uint32 QuestRewardID;
         int32 Expansion;
         QuestObjectives Objectives;

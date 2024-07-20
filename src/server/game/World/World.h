@@ -24,10 +24,10 @@
 #define __WORLD_H
 
 #include "Common.h"
+#include "AsyncCallbackProcessor.h"
 #include "DatabaseEnvFwd.h"
 #include "LockedQueue.h"
 #include "ObjectGuid.h"
-#include "QueryCallbackProcessor.h"
 #include "SharedDefines.h"
 #include "Timer.h"
 
@@ -93,6 +93,7 @@ enum WorldTimers
     WUPDATE_GUILDSAVE,
     WUPDATE_BLACKMARKET,
     WUPDATE_CHECK_FILECHANGES,
+    WUPDATE_WHO_LIST,
     WUPDATE_COUNT
 };
 
@@ -250,6 +251,7 @@ enum WorldIntConfigs
     CONFIG_START_PLAYER_LEVEL,
     CONFIG_START_DEATH_KNIGHT_PLAYER_LEVEL,
     CONFIG_START_DEMON_HUNTER_PLAYER_LEVEL,
+    CONFIG_START_ALLIED_RACE_PLAYER_LEVEL,
     CONFIG_START_PLAYER_MONEY,
     CONFIG_CURRENCY_START_APEXIS_CRYSTALS,
     CONFIG_CURRENCY_MAX_APEXIS_CRYSTALS,
@@ -331,8 +333,6 @@ enum WorldIntConfigs
     CONFIG_PVP_TOKEN_MAP_TYPE,
     CONFIG_PVP_TOKEN_ID,
     CONFIG_PVP_TOKEN_COUNT,
-    CONFIG_INTERVAL_LOG_UPDATE,
-    CONFIG_MIN_LOG_UPDATE,
     CONFIG_ENABLE_SINFO_LOGIN,
     CONFIG_PLAYER_ALLOW_COMMANDS,
     CONFIG_NUMTHREADS,
@@ -351,6 +351,7 @@ enum WorldIntConfigs
     CONFIG_CHARDELETE_MIN_LEVEL,
     CONFIG_CHARDELETE_DEATH_KNIGHT_MIN_LEVEL,
     CONFIG_CHARDELETE_DEMON_HUNTER_MIN_LEVEL,
+    CONFIG_CHARDELETE_ALLIED_RACE_MIN_LEVEL,
     CONFIG_AUTOBROADCAST_CENTER,
     CONFIG_AUTOBROADCAST_INTERVAL,
     CONFIG_MAX_RESULTS_LOOKUP_COMMANDS,
@@ -564,17 +565,6 @@ private:
 
 typedef std::unordered_map<uint32, WorldSession*> SessionMap;
 
-struct CharacterInfo
-{
-    std::string Name;
-    uint32 AccountId;
-    uint8 Class;
-    uint8 Race;
-    uint8 Sex;
-    uint8 Level;
-    bool IsDeleted;
-};
-
 /// The World
 class TC_GAME_API World
 {
@@ -652,16 +642,6 @@ class TC_GAME_API World
 
         /// Get the path where data (dbc, maps) are stored on disk
         std::string const& GetDataPath() const { return m_dataPath; }
-
-        /// When server started?
-        time_t const& GetStartTime() const { return m_startTime; }
-        /// What time is it?
-        time_t const& GetGameTime() const { return m_gameTime; }
-        /// Uptime (in secs)
-        uint32 GetUptime() const { return uint32(m_gameTime - m_startTime); }
-        /// Update time
-        uint32 GetUpdateTime() const { return m_updateTime; }
-        void SetRecordDiffInterval(int32 t) { if (t >= 0) m_int_configs[CONFIG_INTERVAL_LOG_UPDATE] = (uint32)t; }
 
         /// Next daily quests and random bg reset time
         time_t GetNextDailyQuestsResetTime() const { return m_NextDailyQuestReset; }
@@ -782,21 +762,9 @@ class TC_GAME_API World
         void LoadDBVersion();
         char const* GetDBVersion() const { return m_DBVersion.c_str(); }
 
-        void ResetTimeDiffRecord();
-        void RecordTimeDiff(std::string const& text);
-
         void LoadAutobroadcasts();
 
         void UpdateAreaDependentAuras();
-
-        CharacterInfo const* GetCharacterInfo(ObjectGuid const& guid) const;
-        void AddCharacterInfo(ObjectGuid const& guid, uint32 accountId, std::string const& name, uint8 gender, uint8 race, uint8 playerClass, uint8 level, bool isDeleted);
-        void DeleteCharacterInfo(ObjectGuid const& guid) { _characterInfoStore.erase(guid); }
-        bool HasCharacterInfo(ObjectGuid const& guid) { return _characterInfoStore.find(guid) != _characterInfoStore.end(); }
-        void UpdateCharacterInfo(ObjectGuid const& guid, std::string const& name, uint8 gender = GENDER_NONE, uint8 race = RACE_NONE);
-        void UpdateCharacterInfoLevel(ObjectGuid const& guid, uint8 level);
-        void UpdateCharacterInfoAccount(ObjectGuid const& guid, uint32 accountId);
-        void UpdateCharacterInfoDeleted(ObjectGuid const& guid, bool deleted, std::string const* name = nullptr);
 
         uint32 GetCleaningFlags() const { return m_CleaningFlags; }
         void   SetCleaningFlags(uint32 flags) { m_CleaningFlags = flags; }
@@ -808,6 +776,7 @@ class TC_GAME_API World
 
     protected:
         void _UpdateGameTime();
+
         // callback for UpdateRealmCharacters
         void _UpdateRealmCharCount(PreparedQueryResult resultCharCount);
 
@@ -836,15 +805,10 @@ class TC_GAME_API World
 
         bool m_isClosed;
 
-        time_t m_startTime;
-        time_t m_gameTime;
         IntervalTimer m_timers[WUPDATE_COUNT];
         time_t mail_timer;
         time_t mail_timer_expires;
         time_t blackmarket_timer;
-        uint32 m_updateTime, m_updateTimeSum;
-        uint32 m_updateTimeCount;
-        uint32 m_currentTime;
 
         SessionMap m_sessions;
         typedef std::unordered_map<uint32, time_t> DisconnectMap;
@@ -910,10 +874,6 @@ class TC_GAME_API World
         };
         typedef std::unordered_map<uint8, Autobroadcast> AutobroadcastContainer;
         AutobroadcastContainer m_Autobroadcasts;
-
-        typedef std::map<ObjectGuid, CharacterInfo> CharacterInfoContainer;
-        CharacterInfoContainer _characterInfoStore;
-        void LoadCharacterInfoStore();
 
         void ProcessQueryCallbacks();
         QueryCallbackProcessor _queryProcessor;

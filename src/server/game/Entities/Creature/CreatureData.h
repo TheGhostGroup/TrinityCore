@@ -28,6 +28,7 @@
 #include <cmath>
 
 struct ItemTemplate;
+enum class VisibilityDistanceType : uint8;
 
 enum CreatureDifficultyFlags
 {
@@ -285,6 +286,7 @@ enum CreatureFlagsExtra
     CREATURE_FLAG_EXTRA_GUARD | CREATURE_FLAG_EXTRA_IGNORE_PATHFINDING | CREATURE_FLAG_EXTRA_NO_PLAYER_DAMAGE_REQ | CREATURE_FLAG_EXTRA_IMMUNITY_KNOCKBACK)
 
 const uint32 CREATURE_REGEN_INTERVAL = 2 * IN_MILLISECONDS;
+const uint32 PET_FOCUS_REGEN_INTERVAL = 4 * IN_MILLISECONDS;
 const uint32 CREATURE_NOPATH_EVADE_TIME = 5 * IN_MILLISECONDS;
 
 const uint8 MAX_KILL_CREDIT = 2;
@@ -563,6 +565,7 @@ struct CreatureAddon
     uint16 movementAnimKit;
     uint16 meleeAnimKit;
     std::vector<uint32> auras;
+    VisibilityDistanceType visibilityDistanceType;
 };
 
 // Vendors

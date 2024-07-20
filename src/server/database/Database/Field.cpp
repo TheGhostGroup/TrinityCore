@@ -293,16 +293,13 @@ bool Field::IsNumeric() const
 
 #ifdef TRINITY_DEBUG
 
-void Field::LogWrongType(char* getter) const
+void Field::LogWrongType(char const* getter) const
 {
     TC_LOG_WARN("sql.sql", "Warning: %s on %s field %s.%s (%s.%s) at index %u.",
         getter, meta.Type, meta.TableAlias, meta.Alias, meta.TableName, meta.Name, meta.Index);
 }
 
-#ifdef _WIN32 // hack for broken mysql.h not including the correct winsock header for SOCKET definition, fixed in 5.7
-#include <winsock2.h>
-#endif
-#include <mysql.h>
+#include "MySQLHacks.h"
 
 static char const* FieldTypeToString(enum_field_types type)
 {
@@ -338,7 +335,7 @@ static char const* FieldTypeToString(enum_field_types type)
     }
 }
 
-void Field::SetMetadata(MYSQL_FIELD* field, uint32 fieldIndex)
+void Field::SetMetadata(MySQLField* field, uint32 fieldIndex)
 {
     meta.TableName = field->org_table;
     meta.TableAlias = field->table;

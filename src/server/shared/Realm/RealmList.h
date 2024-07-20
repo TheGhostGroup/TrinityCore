@@ -21,6 +21,7 @@
 
 #include "Define.h"
 #include "Realm.h"
+#include <array>
 #include <map>
 #include <vector>
 #include <unordered_set>
@@ -31,7 +32,11 @@ struct RealmBuildInfo
     uint32 MajorVersion;
     uint32 MinorVersion;
     uint32 BugfixVersion;
-    uint32 HotfixVersion;
+    std::array<char, 4> HotfixVersion;
+    std::array<uint8, 16> WinAuthSeed;
+    std::array<uint8, 16> Win64AuthSeed;
+    std::array<uint8, 16> Mac64AuthSeed;
+
 };
 
 namespace boost
@@ -72,6 +77,7 @@ namespace Trinity
     namespace Asio
     {
         class IoContext;
+        class DeadlineTimer;
     }
 }
 
@@ -100,16 +106,18 @@ public:
 private:
     RealmList();
 
+    void LoadBuildInfo();
     void UpdateRealms(boost::system::error_code const& error);
     void UpdateRealm(Realm& realm, Battlenet::RealmHandle const& id, uint32 build, std::string const& name,
         boost::asio::ip::address&& address, boost::asio::ip::address&& localAddr, boost::asio::ip::address&& localSubmask,
         uint16 port, uint8 icon, RealmFlags flag, uint8 timezone, AccountTypes allowedSecurityLevel, float population);
 
+    std::vector<RealmBuildInfo> _builds;
     std::unique_ptr<boost::shared_mutex> _realmsMutex;
     RealmMap _realms;
     std::unordered_set<std::string> _subRegions;
     uint32 _updateInterval;
-    std::unique_ptr<boost::asio::deadline_timer> _updateTimer;
+    std::unique_ptr<Trinity::Asio::DeadlineTimer> _updateTimer;
     std::unique_ptr<boost::asio::ip::tcp_resolver> _resolver;
 };
 

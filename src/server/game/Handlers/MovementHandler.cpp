@@ -20,6 +20,7 @@
 #include "Battleground.h"
 #include "Common.h"
 #include "Corpse.h"
+#include "GameTime.h"
 #include "Garrison.h"
 #include "InstancePackets.h"
 #include "InstanceSaveMgr.h"
@@ -47,6 +48,9 @@ void WorldSession::HandleMoveWorldportAck()
     // ignore unexpected far teleports
     if (!GetPlayer()->IsBeingTeleportedFar())
         return;
+
+    // We must calculate this before SetSemaphoreTeleportFar(false)
+    uint32 castOnArrivalSpellId = GetPlayer()->GetOnArrivalCastSpellTeleport();
 
     bool seamlessTeleport = GetPlayer()->IsBeingTeleportedSeamlessly();
     GetPlayer()->SetSemaphoreTeleportFar(false);
@@ -93,6 +97,7 @@ void WorldSession::HandleMoveWorldportAck()
         z += GetPlayer()->GetFloatValue(UNIT_FIELD_HOVERHEIGHT);
 
     GetPlayer()->Relocate(loc.GetPositionX(), loc.GetPositionY(), z, loc.GetOrientation());
+    GetPlayer()->SetFallInformation(0, GetPlayer()->GetPositionZ());
 
     GetPlayer()->ResetMap();
     GetPlayer()->SetMap(newMap);
@@ -217,6 +222,13 @@ void WorldSession::HandleMoveWorldportAck()
     // resummon pet
     GetPlayer()->ResummonPetTemporaryUnSummonedIfAny();
 
+    // now that the player has been relocated, it's time to cast the arrival spell (if any)
+    if (castOnArrivalSpellId != 0)
+    {
+        GetPlayer()->CastSpell(GetPlayer(), castOnArrivalSpellId, true);
+        GetPlayer()->ResetOnArrivalCastSpellTeleport();
+    }
+
     //lets process all delayed operations on successful teleport
     GetPlayer()->ProcessDelayedOperations();
 }
@@ -264,6 +276,7 @@ void WorldSession::HandleMoveTeleportAck(WorldPackets::Movement::MoveTeleportAck
     WorldLocation const& dest = plMover->GetTeleportDest();
 
     plMover->UpdatePosition(dest, true);
+    plMover->SetFallInformation(0, GetPlayer()->GetPositionZ());
 
     uint32 newzone, newarea;
     plMover->GetZoneAndAreaId(newzone, newarea);
@@ -301,6 +314,10 @@ void WorldSession::HandleMovementOpcode(OpcodeClient opcode, MovementInfo& movem
 
     Player* plrMover = mover->ToPlayer();
 
+    TC_LOG_TRACE("opcodes.movement", "HandleMovementOpcode Name %s: opcode %u %s Flags %u Flags2 %u Pos %s",
+        mover->GetName().c_str(), opcode, GetOpcodeNameForLogging(opcode).c_str(),
+        movementInfo.flags, movementInfo.flags2, movementInfo.pos.ToString().c_str());
+
     // ignore, waiting processing in WorldSession::HandleMoveWorldportAckOpcode and WorldSession::HandleMoveTeleportAck
     if (plrMover && plrMover->IsBeingTeleported())
         return;
@@ -327,9 +344,13 @@ void WorldSession::HandleMovementOpcode(OpcodeClient opcode, MovementInfo& movem
     /* handle special cases */
     if (!movementInfo.transport.guid.IsEmpty())
     {
+        // We were teleported, skip packets that were broadcast before teleport
+        if (movementInfo.pos.GetExactDist2d(mover) > SIZE_OF_GRIDS)
+            return;
+
         // transports size limited
         // (also received at zeppelin leave by some reason with t_* as absolute in continent coordinates, can be safely skipped)
-        if (movementInfo.transport.pos.GetPositionX() > 50 || movementInfo.transport.pos.GetPositionY() > 50 || movementInfo.transport.pos.GetPositionZ() > 50)
+        if (fabs(movementInfo.transport.pos.GetPositionX()) > 75.0f || fabs(movementInfo.transport.pos.GetPositionY()) > 75.0f || fabs(movementInfo.transport.pos.GetPositionZ()) > 75.0f)
         {
             return;
         }
@@ -372,13 +393,17 @@ void WorldSession::HandleMovementOpcode(OpcodeClient opcode, MovementInfo& movem
     if (opcode == CMSG_MOVE_FALL_LAND && plrMover && !plrMover->IsInFlight())
         plrMover->HandleFall(movementInfo);
 
+    // interrupt parachutes upon falling or landing in water
+    if (opcode == CMSG_MOVE_FALL_LAND || opcode == CMSG_MOVE_START_SWIM)
+        mover->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_LANDING); // Parachutes
+
     if (plrMover && ((movementInfo.flags & MOVEMENTFLAG_SWIMMING) != 0) != plrMover->IsInWater())
     {
         // now client not include swimming flag in case jumping under water
         plrMover->SetInWater(!plrMover->IsInWater() || plrMover->GetMap()->IsUnderWater(plrMover->GetPhaseShift(), movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY(), movementInfo.pos.GetPositionZ()));
     }
 
-    uint32 mstime = getMSTime();
+    uint32 mstime = GameTime::GetGameTimeMS();
     /*----------------------*/
     if (m_clientTimeDelay == 0)
         m_clientTimeDelay = mstime - movementInfo.time;
@@ -419,7 +444,7 @@ void WorldSession::HandleMovementOpcode(OpcodeClient opcode, MovementInfo& movem
 
         plrMover->UpdateFallInformationIfNeed(movementInfo, opcode);
 
-        if (movementInfo.pos.GetPositionZ() < plrMover->GetMap()->GetMinHeight(movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY()))
+        if (movementInfo.pos.GetPositionZ() < plrMover->GetMap()->GetMinHeight(plrMover->GetPhaseShift(), movementInfo.pos.GetPositionX(), movementInfo.pos.GetPositionY()))
         {
             if (!(plrMover->GetBattleground() && plrMover->GetBattleground()->HandlePlayerUnderMap(_player)))
             {

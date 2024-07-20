@@ -677,3 +677,25 @@ void WorldPackets::Misc::CloseInteraction::Read()
 {
     _worldPacket >> SourceGuid;
 }
+
+WorldPacket const* WorldPackets::Misc::OpenAlliedRaceDetailsGiver::Write()
+{
+    _worldPacket << Guid;
+    _worldPacket << RaceId;
+
+    return &_worldPacket;
+}
+
+void WorldPackets::Misc::FactionSelect::Read()
+{
+    _worldPacket >> FactionChoice;
+}
+
+WorldPacket const* WorldPackets::Misc::StartTimer::Write()
+{
+    _worldPacket << int32(TimeLeft);
+    _worldPacket << int32(TotalTime);
+    _worldPacket << int32(Type);
+
+    return &_worldPacket;
+}

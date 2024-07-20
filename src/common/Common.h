@@ -42,9 +42,7 @@
 
 #if TRINITY_COMPILER == TRINITY_COMPILER_MICROSOFT
 
-#define snprintf _snprintf
 #define atoll _atoi64
-#define vsnprintf _vsnprintf
 #define llabs _abs64
 
 #else
@@ -99,8 +97,6 @@ enum LocaleConstant : uint8
 
 const uint8 OLD_TOTAL_LOCALES = 9; /// @todo convert in simple system
 #define DEFAULT_LOCALE LOCALE_enUS
-
-#define MAX_LOCALES 11
 
 TC_COMMON_API extern char const* localeNames[TOTAL_LOCALES];
 

@@ -91,7 +91,23 @@ Map::~Map()
     MMAP::MMapFactory::createOrGetMMapManager()->unloadMapInstance(GetId(), i_InstanceId);
 }
 
-bool Map::ExistMap(uint32 mapid, int gx, int gy)
+void Map::DiscoverGridMapFiles()
+{
+    for (uint32 gx = 0; gx < MAX_NUMBER_OF_GRIDS; ++gx)
+        for (uint32 gy = 0; gy < MAX_NUMBER_OF_GRIDS; ++gy)
+            i_gridFileExists[gx * MAX_NUMBER_OF_GRIDS + gy] = ExistMap(GetId(), gx, gy, false);
+}
+
+Map* Map::GetRootParentTerrainMap()
+{
+    Map* map = this;
+    while (map != map->m_parentTerrainMap)
+        map = map->m_parentTerrainMap;
+
+    return map;
+}
+
+bool Map::ExistMap(uint32 mapid, int gx, int gy, bool log /*= true*/)
 {
     std::string fileName = Trinity::StringFormat("%smaps/%04u_%02u_%02u.map", sWorld->GetDataPath().c_str(), mapid, gx, gy);
 
@@ -99,8 +115,11 @@ bool Map::ExistMap(uint32 mapid, int gx, int gy)
     FILE* file = fopen(fileName.c_str(), "rb");
     if (!file)
     {
-        TC_LOG_ERROR("maps", "Map file '%s' does not exist!", fileName.c_str());
-        TC_LOG_ERROR("maps", "Please place MAP-files (*.map) in the appropriate directory (%s), or correct the DataDir setting in your worldserver.conf file.", (sWorld->GetDataPath()+"maps/").c_str());
+        if (log)
+        {
+            TC_LOG_ERROR("maps", "Map file '%s' does not exist!", fileName.c_str());
+            TC_LOG_ERROR("maps", "Please place MAP-files (*.map) in the appropriate directory (%s), or correct the DataDir setting in your worldserver.conf file.", (sWorld->GetDataPath() + "maps/").c_str());
+        }
     }
     else
     {
@@ -108,8 +127,11 @@ bool Map::ExistMap(uint32 mapid, int gx, int gy)
         if (fread(&header, sizeof(header), 1, file) == 1)
         {
             if (header.mapMagic.asUInt != MapMagic.asUInt || header.versionMagic.asUInt != MapVersionMagic.asUInt)
-                TC_LOG_ERROR("maps", "Map file '%s' is from an incompatible map version (%.*s %.*s), %.*s %.*s is expected. Please pull your source, recompile tools and recreate maps using the updated mapextractor, then replace your old map files with new files. If you still have problems search on forum for error TCE00018.",
-                    fileName.c_str(), 4, header.mapMagic.asChar, 4, header.versionMagic.asChar, 4, MapMagic.asChar, 4, MapVersionMagic.asChar);
+            {
+                if (log)
+                    TC_LOG_ERROR("maps", "Map file '%s' is from an incompatible map version (%.*s %.*s), %.*s %.*s is expected. Please pull your source, recompile tools and recreate maps using the updated mapextractor, then replace your old map files with new files. If you still have problems search on forum for error TCE00018.",
+                        fileName.c_str(), 4, header.mapMagic.asChar, 4, header.versionMagic.asChar, 4, MapMagic.asChar, 4, MapVersionMagic.asChar);
+            }
             else
                 ret = true;
         }
@@ -182,6 +204,7 @@ void Map::LoadVMap(int gx, int gy)
 void Map::LoadMap(int gx, int gy)
 {
     LoadMapImpl(this, gx, gy);
+
     for (Map* childBaseMap : *m_childTerrainMaps)
         childBaseMap->LoadMap(gx, gy);
 }
@@ -191,29 +214,32 @@ void Map::LoadMapImpl(Map* map, int gx, int gy)
     if (map->GridMaps[gx][gy])
         return;
 
-    Map* parent = map->m_parentMap;
-    ++parent->GridMapReference[gx][gy];
-
-    // load grid map for base map
-    if (parent != map)
-    {
-        GridCoord ngridCoord = GridCoord((MAX_NUMBER_OF_GRIDS - 1) - gx, (MAX_NUMBER_OF_GRIDS - 1) - gy);
-        if (!parent->GridMaps[gx][gy])
-            parent->EnsureGridCreated(ngridCoord);
-
-        map->GridMaps[gx][gy] = parent->GridMaps[gx][gy];
-        return;
-    }
-
     // map file name
     std::string fileName = Trinity::StringFormat("%smaps/%04u_%02u_%02u.map", sWorld->GetDataPath().c_str(), map->GetId(), gx, gy);
     TC_LOG_DEBUG("maps", "Loading map %s", fileName.c_str());
     // loading data
-    map->GridMaps[gx][gy] = new GridMap();
-    if (!map->GridMaps[gx][gy]->loadData(fileName.c_str()))
-        TC_LOG_ERROR("maps", "Error loading map file: %s", fileName.c_str());
+    std::shared_ptr<GridMap> gridMap = std::make_shared<GridMap>();
+    GridMap::LoadResult gridMapLoadResult = gridMap->loadData(fileName.c_str());
+    if (gridMapLoadResult == GridMap::LoadResult::Ok)
+        map->GridMaps[gx][gy] = std::move(gridMap);
+    else
+    {
+        map->i_gridFileExists[gx * MAX_NUMBER_OF_GRIDS + gy] = false;
+        Map* parentTerrain = map;
+        while (parentTerrain != parentTerrain->m_parentTerrainMap)
+        {
+            map->GridMaps[gx][gy] = parentTerrain->m_parentTerrainMap->GridMaps[gx][gy];
+            if (map->GridMaps[gx][gy])
+                break;
 
-    sScriptMgr->OnLoadGridMap(map, map->GridMaps[gx][gy], gx, gy);
+            parentTerrain = parentTerrain->m_parentTerrainMap;
+        }
+    }
+
+    if (map->GridMaps[gx][gy])
+        sScriptMgr->OnLoadGridMap(map, map->GridMaps[gx][gy].get(), gx, gy);
+    else if (gridMapLoadResult == GridMap::LoadResult::InvalidFile)
+        TC_LOG_ERROR("maps", "Error loading map file: %s", fileName.c_str());
 }
 
 void Map::UnloadMap(int gx, int gy)
@@ -226,25 +252,18 @@ void Map::UnloadMap(int gx, int gy)
 
 void Map::UnloadMapImpl(Map* map, int gx, int gy)
 {
-    if (map->GridMaps[gx][gy])
-    {
-        Map* parent = map->m_parentMap;
-        if (!--parent->GridMapReference[gx][gy])
-        {
-            parent->GridMaps[gx][gy]->unloadData();
-            delete parent->GridMaps[gx][gy];
-            parent->GridMaps[gx][gy] = nullptr;
-        }
-    }
-
     map->GridMaps[gx][gy] = nullptr;
 }
 
 void Map::LoadMapAndVMap(int gx, int gy)
 {
     LoadMap(gx, gy);
-    LoadVMap(gx, gy);
-    LoadMMap(gx, gy);
+    // Only load the data for the base map
+    if (this == m_parentMap)
+    {
+        LoadVMap(gx, gy);
+        LoadMMap(gx, gy);
+    }
 }
 
 void Map::LoadAllCells()
@@ -518,7 +537,7 @@ void Map::EnsureGridCreated_i(const GridCoord &p)
     {
         TC_LOG_DEBUG("maps", "Creating grid[%u, %u] for map %u instance %u", p.x_coord, p.y_coord, GetId(), i_InstanceId);
 
-        NGridType* ngrid = new NGridType(p.x_coord*MAX_NUMBER_OF_GRIDS + p.y_coord, p.x_coord, p.y_coord, i_gridExpiry, sWorld->getBoolConfig(CONFIG_GRID_UNLOAD));
+        NGridType* ngrid = new NGridType(p.x_coord * MAX_NUMBER_OF_GRIDS + p.y_coord, p.x_coord, p.y_coord, i_gridExpiry, sWorld->getBoolConfig(CONFIG_GRID_UNLOAD));
         setNGrid(ngrid, p.x_coord, p.y_coord);
 
         // build a linkage between this map and NGridType
@@ -531,7 +550,22 @@ void Map::EnsureGridCreated_i(const GridCoord &p)
         int gy = (MAX_NUMBER_OF_GRIDS - 1) - p.y_coord;
 
         if (!GridMaps[gx][gy])
-            m_parentTerrainMap->LoadMapAndVMap(gx, gy);
+        {
+            Map* rootParentTerrainMap = m_parentMap->GetRootParentTerrainMap();
+            // because LoadMapAndVMap is always entered using rootParentTerrainMap, we can only lock that once and not have to do it for every child map
+            std::unique_lock<std::mutex> lock(rootParentTerrainMap->_gridLock, std::defer_lock);
+            if (this != rootParentTerrainMap)
+                lock.lock();
+
+            if (!m_parentMap->GridMaps[gx][gy])
+                rootParentTerrainMap->LoadMapAndVMap(gx, gy);
+
+            if (m_parentMap->GridMaps[gx][gy])
+            {
+                GridMaps[gx][gy] = m_parentMap->GridMaps[gx][gy];
+                ++rootParentTerrainMap->GridMapReference[gx][gy];
+            }
+        }
     }
 }
 
@@ -789,14 +823,9 @@ void Map::Update(const uint32 t_diff)
 
         VisitNearbyCellsOf(player, grid_object_update, world_object_update);
 
-        // If player is using far sight, visit that object too
+        // If player is using far sight or mind vision, visit that object too
         if (WorldObject* viewPoint = player->GetViewpoint())
-        {
-            if (Creature* viewCreature = viewPoint->ToCreature())
-                VisitNearbyCellsOf(viewCreature, grid_object_update, world_object_update);
-            else if (DynamicObject* viewObject = viewPoint->ToDynObject())
-                VisitNearbyCellsOf(viewObject, grid_object_update, world_object_update);
-        }
+            VisitNearbyCellsOf(viewPoint, grid_object_update, world_object_update);
 
         // Handle updates for creatures in combat with player and are more than 60 yards away
         if (player->IsInCombat())
@@ -964,10 +993,15 @@ void Map::RemovePlayerFromMap(Player* player, bool remove)
 {
     sScriptMgr->OnPlayerLeaveMap(this, player);
 
+    player->getHostileRefManager().deleteReferences(); // multithreading crashfix
+
+    bool const inWorld = player->IsInWorld();
     player->RemoveFromWorld();
     SendRemoveTransports(player);
 
-    player->UpdateObjectVisibility(true);
+    if (!inWorld) // if was in world, RemoveFromWorld() called DestroyForNearbyPlayers()
+        player->DestroyForNearbyPlayers(); // previous player->UpdateObjectVisibility(true)
+
     if (player->IsInGrid())
         player->RemoveFromGrid();
     else
@@ -980,11 +1014,14 @@ void Map::RemovePlayerFromMap(Player* player, bool remove)
 template<class T>
 void Map::RemoveFromMap(T *obj, bool remove)
 {
+    bool const inWorld = obj->IsInWorld() && obj->GetTypeId() >= TYPEID_UNIT && obj->GetTypeId() <= TYPEID_GAMEOBJECT;
     obj->RemoveFromWorld();
     if (obj->isActiveObject())
         RemoveFromActive(obj);
 
-    obj->UpdateObjectVisibility(true);
+    if (!inWorld) // if was in world, RemoveFromWorld() called DestroyForNearbyPlayers()
+        obj->DestroyForNearbyPlayers(); // previous obj->UpdateObjectVisibility(true)
+
     obj->RemoveFromGrid();
 
     obj->ResetMap();
@@ -1825,9 +1862,13 @@ bool Map::UnloadGrid(NGridType& ngrid, bool unloadAll)
     // delete grid map, but don't delete if it is from parent map (and thus only reference)
     if (GridMaps[gx][gy])
     {
-        m_parentTerrainMap->UnloadMap(gx, gy);
-        VMAP::VMapFactory::createOrGetVMapManager()->unloadMap(m_parentTerrainMap->GetId(), gx, gy);
-        MMAP::MMapFactory::createOrGetMMapManager()->unloadMap(m_parentTerrainMap->GetId(), gx, gy);
+        Map* terrainRoot = m_parentMap->GetRootParentTerrainMap();
+        if (!--terrainRoot->GridMapReference[gx][gy])
+        {
+            m_parentMap->GetRootParentTerrainMap()->UnloadMap(gx, gy);
+            VMAP::VMapFactory::createOrGetVMapManager()->unloadMap(terrainRoot->GetId(), gx, gy);
+            MMAP::MMapFactory::createOrGetMMapManager()->unloadMap(terrainRoot->GetId(), gx, gy);
+        }
     }
 
     TC_LOG_DEBUG("maps", "Unloading grid[%u, %u] for map %u finished", x, y, GetId());
@@ -1914,7 +1955,6 @@ GridMap::GridMap()
     _liquidEntry = nullptr;
     _liquidFlags = nullptr;
     _liquidMap  = nullptr;
-    _fileExists = false;
 }
 
 GridMap::~GridMap()
@@ -1922,7 +1962,7 @@ GridMap::~GridMap()
     unloadData();
 }
 
-bool GridMap::loadData(const char* filename)
+GridMap::LoadResult GridMap::loadData(const char* filename)
 {
     // Unload old data if exist
     unloadData();
@@ -1931,13 +1971,12 @@ bool GridMap::loadData(const char* filename)
     // Not return error if file not found
     FILE* in = fopen(filename, "rb");
     if (!in)
-        return true;
+        return LoadResult::FileDoesNotExist;
 
-    _fileExists = true;
     if (fread(&header, sizeof(header), 1, in) != 1)
     {
         fclose(in);
-        return false;
+        return LoadResult::InvalidFile;
     }
 
     if (header.mapMagic.asUInt == MapMagic.asUInt && header.versionMagic.asUInt == MapVersionMagic.asUInt)
@@ -1947,30 +1986,30 @@ bool GridMap::loadData(const char* filename)
         {
             TC_LOG_ERROR("maps", "Error loading map area data\n");
             fclose(in);
-            return false;
+            return LoadResult::InvalidFile;
         }
         // load up height data
         if (header.heightMapOffset && !loadHeightData(in, header.heightMapOffset, header.heightMapSize))
         {
             TC_LOG_ERROR("maps", "Error loading map height data\n");
             fclose(in);
-            return false;
+            return LoadResult::InvalidFile;
         }
         // load up liquid data
         if (header.liquidMapOffset && !loadLiquidData(in, header.liquidMapOffset, header.liquidMapSize))
         {
             TC_LOG_ERROR("maps", "Error loading map liquids data\n");
             fclose(in);
-            return false;
+            return LoadResult::InvalidFile;
         }
         fclose(in);
-        return true;
+        return LoadResult::Ok;
     }
 
     TC_LOG_ERROR("maps", "Map file '%s' is from an incompatible map version (%.*s %.*s), %.*s %.*s is expected. Please pull your source, recompile tools and recreate maps using the updated mapextractor, then replace your old map files with new files. If you still have problems search on forum for error TCE00018.",
         filename, 4, header.mapMagic.asChar, 4, header.versionMagic.asChar, 4, MapMagic.asChar, 4, MapVersionMagic.asChar);
     fclose(in);
-    return false;
+    return LoadResult::InvalidFile;
 }
 
 void GridMap::unloadData()
@@ -1990,7 +2029,6 @@ void GridMap::unloadData()
     _liquidFlags = nullptr;
     _liquidMap  = nullptr;
     _gridGetHeight = &GridMap::getHeightFromFlat;
-    _fileExists = false;
 }
 
 bool GridMap::loadAreaData(FILE* in, uint32 offset, uint32 /*size*/)
@@ -2522,23 +2560,8 @@ inline ZLiquidStatus GridMap::getLiquidStatus(float x, float y, float z, uint8 R
     return LIQUID_MAP_ABOVE_WATER;
 }
 
-inline GridMap* Map::GetGrid(float x, float y)
-{
-    // half opt method
-    int gx=(int)(CENTER_GRID_ID - x/SIZE_OF_GRIDS);                       //grid x
-    int gy=(int)(CENTER_GRID_ID - y/SIZE_OF_GRIDS);                       //grid y
-
-    // ensure GridMap is loaded
-    EnsureGridCreated(GridCoord((MAX_NUMBER_OF_GRIDS - 1) - gx, (MAX_NUMBER_OF_GRIDS - 1) - gy));
-
-    return GridMaps[gx][gy];
-}
-
 GridMap* Map::GetGrid(uint32 mapId, float x, float y)
 {
-    if (GetId() == mapId)
-        return GetGrid(x, y);
-
     // half opt method
     int gx = (int)(CENTER_GRID_ID - x / SIZE_OF_GRIDS);                   //grid x
     int gy = (int)(CENTER_GRID_ID - y / SIZE_OF_GRIDS);                   //grid y
@@ -2546,23 +2569,23 @@ GridMap* Map::GetGrid(uint32 mapId, float x, float y)
     // ensure GridMap is loaded
     EnsureGridCreated(GridCoord((MAX_NUMBER_OF_GRIDS - 1) - gx, (MAX_NUMBER_OF_GRIDS - 1) - gy));
 
-    GridMap* grid = GridMaps[gx][gy];
+    GridMap* grid = GridMaps[gx][gy].get();
     auto childMapItr = std::find_if(m_childTerrainMaps->begin(), m_childTerrainMaps->end(), [mapId](Map* childTerrainMap) { return childTerrainMap->GetId() == mapId; });
-    if (childMapItr != m_childTerrainMaps->end() && (*childMapItr)->GridMaps[gx][gy]->fileExists())
-        grid = (*childMapItr)->GridMaps[gx][gy];
+    if (childMapItr != m_childTerrainMaps->end() && (*childMapItr)->GridMaps[gx][gy])
+        grid = (*childMapItr)->GridMaps[gx][gy].get();
 
     return grid;
 }
 
-bool Map::HasGrid(uint32 mapId, int32 gx, int32 gy) const
+bool Map::HasChildMapGridFile(uint32 mapId, int32 gx, int32 gy) const
 {
     auto childMapItr = std::find_if(m_childTerrainMaps->begin(), m_childTerrainMaps->end(), [mapId](Map* childTerrainMap) { return childTerrainMap->GetId() == mapId; });
-    return childMapItr != m_childTerrainMaps->end() && (*childMapItr)->GridMaps[gx][gy] && (*childMapItr)->GridMaps[gx][gy]->fileExists();
+    return childMapItr != m_childTerrainMaps->end() && (*childMapItr)->i_gridFileExists[gx * MAX_NUMBER_OF_GRIDS + gy];
 }
 
-float Map::GetWaterOrGroundLevel(PhaseShift const& phaseShift, float x, float y, float z, float* ground /*= nullptr*/, bool /*swim = false*/) const
+float Map::GetWaterOrGroundLevel(PhaseShift const& phaseShift, float x, float y, float z, float* ground /*= nullptr*/, bool /*swim = false*/)
 {
-    if (const_cast<Map*>(this)->GetGrid(x, y))
+    if (GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
     {
         // we need ground level (including grid height version) for proper return water level in point
         float ground_z = GetHeight(phaseShift, x, y, z, true, 50.0f);
@@ -2578,12 +2601,12 @@ float Map::GetWaterOrGroundLevel(PhaseShift const& phaseShift, float x, float y,
     return VMAP_INVALID_HEIGHT_VALUE;
 }
 
-float Map::GetStaticHeight(PhaseShift const& phaseShift, float x, float y, float z, bool checkVMap /*= true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/) const
+float Map::GetStaticHeight(PhaseShift const& phaseShift, float x, float y, float z, bool checkVMap /*= true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/)
 {
     // find raw .map surface under Z coordinates
     float mapHeight = VMAP_INVALID_HEIGHT_VALUE;
     uint32 terrainMapId = PhasingHandler::GetTerrainMapId(phaseShift, this, x, y);
-    if (GridMap* gmap = m_parentTerrainMap->GetGrid(terrainMapId, x, y))
+    if (GridMap* gmap = GetGrid(terrainMapId, x, y))
     {
         float gridHeight = gmap->getHeight(x, y);
         // look from a bit higher pos to find the floor, ignore under surface case
@@ -2621,9 +2644,9 @@ float Map::GetStaticHeight(PhaseShift const& phaseShift, float x, float y, float
     return mapHeight;                               // explicitly use map data
 }
 
-float Map::GetMinHeight(float x, float y) const
+float Map::GetMinHeight(PhaseShift const& phaseShift, float x, float y)
 {
-    if (GridMap const* grid = const_cast<Map*>(this)->GetGrid(x, y))
+    if (GridMap const* grid = GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
         return grid->getMinHeight(x, y);
 
     return -500.0f;
@@ -2653,7 +2676,7 @@ inline bool IsOutdoorWMO(uint32 mogpFlags, int32 /*adtId*/, int32 /*rootId*/, in
     return outdoor;
 }
 
-bool Map::IsOutdoors(PhaseShift const& phaseShift, float x, float y, float z) const
+bool Map::IsOutdoors(PhaseShift const& phaseShift, float x, float y, float z)
 {
     uint32 mogpFlags;
     int32 adtId, rootId, groupId;
@@ -2672,7 +2695,7 @@ bool Map::IsOutdoors(PhaseShift const& phaseShift, float x, float y, float z) co
     return IsOutdoorWMO(mogpFlags, adtId, rootId, groupId, wmoEntry, atEntry);
 }
 
-bool Map::GetAreaInfo(PhaseShift const& phaseShift, float x, float y, float z, uint32 &flags, int32 &adtId, int32 &rootId, int32 &groupId) const
+bool Map::GetAreaInfo(PhaseShift const& phaseShift, float x, float y, float z, uint32 &flags, int32 &adtId, int32 &rootId, int32 &groupId)
 {
     float vmap_z = z;
     float dynamic_z = z;
@@ -2708,7 +2731,7 @@ bool Map::GetAreaInfo(PhaseShift const& phaseShift, float x, float y, float z, u
     if (hasVmapAreaInfo || hasDynamicAreaInfo)
     {
         // check if there's terrain between player height and object height
-        if (GridMap* gmap = m_parentTerrainMap->GetGrid(terrainMapId, x, y))
+        if (GridMap* gmap = GetGrid(terrainMapId, x, y))
         {
             float mapHeight = gmap->getHeight(x, y);
             // z + 2.0f condition taken from GetHeight(), not sure if it's such a great choice...
@@ -2720,7 +2743,7 @@ bool Map::GetAreaInfo(PhaseShift const& phaseShift, float x, float y, float z, u
     return false;
 }
 
-uint32 Map::GetAreaId(PhaseShift const& phaseShift, float x, float y, float z, bool *isOutdoors) const
+uint32 Map::GetAreaId(PhaseShift const& phaseShift, float x, float y, float z, bool *isOutdoors)
 {
     uint32 mogpFlags;
     int32 adtId, rootId, groupId;
@@ -2742,7 +2765,7 @@ uint32 Map::GetAreaId(PhaseShift const& phaseShift, float x, float y, float z, b
 
     if (!areaId)
     {
-        if (GridMap* gmap = m_parentTerrainMap->GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
+        if (GridMap* gmap = GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
             areaId = gmap->getArea(x, y);
 
         // this used while not all *.map files generated (instances)
@@ -2760,12 +2783,12 @@ uint32 Map::GetAreaId(PhaseShift const& phaseShift, float x, float y, float z, b
     return areaId;
 }
 
-uint32 Map::GetAreaId(PhaseShift const& phaseShift, float x, float y, float z) const
+uint32 Map::GetAreaId(PhaseShift const& phaseShift, float x, float y, float z)
 {
     return GetAreaId(phaseShift, x, y, z, nullptr);
 }
 
-uint32 Map::GetZoneId(PhaseShift const& phaseShift, float x, float y, float z) const
+uint32 Map::GetZoneId(PhaseShift const& phaseShift, float x, float y, float z)
 {
     uint32 areaId = GetAreaId(phaseShift, x, y, z);
     if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaId))
@@ -2775,7 +2798,7 @@ uint32 Map::GetZoneId(PhaseShift const& phaseShift, float x, float y, float z) c
     return areaId;
 }
 
-void Map::GetZoneAndAreaId(PhaseShift const& phaseShift, uint32& zoneid, uint32& areaid, float x, float y, float z) const
+void Map::GetZoneAndAreaId(PhaseShift const& phaseShift, uint32& zoneid, uint32& areaid, float x, float y, float z)
 {
     areaid = zoneid = GetAreaId(phaseShift, x, y, z);
     if (AreaTableEntry const* area = sAreaTableStore.LookupEntry(areaid))
@@ -2783,15 +2806,15 @@ void Map::GetZoneAndAreaId(PhaseShift const& phaseShift, uint32& zoneid, uint32&
             zoneid = area->ParentAreaID;
 }
 
-uint8 Map::GetTerrainType(PhaseShift const& phaseShift, float x, float y) const
+uint8 Map::GetTerrainType(PhaseShift const& phaseShift, float x, float y)
 {
-    if (GridMap* gmap = m_parentTerrainMap->GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
+    if (GridMap* gmap = GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
         return gmap->getTerrainType(x, y);
     else
         return 0;
 }
 
-ZLiquidStatus Map::getLiquidStatus(PhaseShift const& phaseShift, float x, float y, float z, uint8 ReqLiquidType, LiquidData* data) const
+ZLiquidStatus Map::getLiquidStatus(PhaseShift const& phaseShift, float x, float y, float z, uint8 ReqLiquidType, LiquidData* data)
 {
     ZLiquidStatus result = LIQUID_MAP_NO_WATER;
     VMAP::IVMapManager* vmgr = VMAP::VMapFactory::createOrGetVMapManager();
@@ -2856,7 +2879,7 @@ ZLiquidStatus Map::getLiquidStatus(PhaseShift const& phaseShift, float x, float 
         }
     }
 
-    if (GridMap* gmap = m_parentTerrainMap->GetGrid(terrainMapId, x, y))
+    if (GridMap* gmap = GetGrid(terrainMapId, x, y))
     {
         LiquidData map_data;
         ZLiquidStatus map_result = gmap->getLiquidStatus(x, y, z, ReqLiquidType, &map_data);
@@ -2877,9 +2900,9 @@ ZLiquidStatus Map::getLiquidStatus(PhaseShift const& phaseShift, float x, float 
     return result;
 }
 
-float Map::GetWaterLevel(PhaseShift const& phaseShift, float x, float y) const
+float Map::GetWaterLevel(PhaseShift const& phaseShift, float x, float y)
 {
-    if (GridMap* gmap = m_parentTerrainMap->GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
+    if (GridMap* gmap = GetGrid(PhasingHandler::GetTerrainMapId(phaseShift, this, x, y), x, y))
         return gmap->getLiquidLevel(x, y);
     else
         return 0;
@@ -2905,19 +2928,19 @@ bool Map::getObjectHitPos(PhaseShift const& phaseShift, float x1, float y1, floa
     return result;
 }
 
-float Map::GetHeight(PhaseShift const& phaseShift, float x, float y, float z, bool vmap /*= true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/) const
+float Map::GetHeight(PhaseShift const& phaseShift, float x, float y, float z, bool vmap /*= true*/, float maxSearchDist /*= DEFAULT_HEIGHT_SEARCH*/)
 {
     return std::max<float>(GetStaticHeight(phaseShift, x, y, z, vmap, maxSearchDist), _dynamicTree.getHeight(x, y, z, maxSearchDist, phaseShift));
 }
 
-bool Map::IsInWater(PhaseShift const& phaseShift, float x, float y, float pZ, LiquidData* data) const
+bool Map::IsInWater(PhaseShift const& phaseShift, float x, float y, float pZ, LiquidData* data)
 {
     LiquidData liquid_status;
     LiquidData* liquid_ptr = data ? data : &liquid_status;
     return (getLiquidStatus(phaseShift, x, y, pZ, MAP_ALL_LIQUIDS, liquid_ptr) & (LIQUID_MAP_IN_WATER | LIQUID_MAP_UNDER_WATER)) != 0;
 }
 
-bool Map::IsUnderWater(PhaseShift const& phaseShift, float x, float y, float z) const
+bool Map::IsUnderWater(PhaseShift const& phaseShift, float x, float y, float z)
 {
     return (getLiquidStatus(phaseShift, x, y, z, MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN) & LIQUID_MAP_UNDER_WATER) != 0;
 }
@@ -3567,7 +3590,7 @@ void InstanceMap::CreateInstanceData(bool load)
     if (load)
     {
         /// @todo make a global storage for this
-        PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_INSTANCE);
+        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_INSTANCE);
         stmt->setUInt16(0, uint16(GetId()));
         stmt->setUInt32(1, i_InstanceId);
         PreparedQueryResult result = CharacterDatabase.Query(stmt);
@@ -3816,7 +3839,7 @@ bool Map::GetEntrancePos(int32 &mapid, float &x, float &y)
 
 bool InstanceMap::HasPermBoundPlayers() const
 {
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_PERM_BIND_BY_INSTANCE);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_PERM_BIND_BY_INSTANCE);
     stmt->setUInt16(0,GetInstanceId());
     return !!CharacterDatabase.Query(stmt);
 }
@@ -3922,6 +3945,11 @@ Conversation* Map::GetConversation(ObjectGuid const& guid)
     return _objectsStore.Find<Conversation>(guid);
 }
 
+Player* Map::GetPlayer(ObjectGuid const& guid)
+{
+    return ObjectAccessor::GetPlayer(this, guid);
+}
+
 Corpse* Map::GetCorpse(ObjectGuid const& guid)
 {
     return _objectsStore.Find<Corpse>(guid);
@@ -3973,7 +4001,7 @@ void Map::SaveCreatureRespawnTime(ObjectGuid::LowType dbGuid, time_t respawnTime
 
     _creatureRespawnTimes[dbGuid] = respawnTime;
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_CREATURE_RESPAWN);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_CREATURE_RESPAWN);
     stmt->setUInt64(0, dbGuid);
     stmt->setUInt32(1, uint32(respawnTime));
     stmt->setUInt16(2, GetId());
@@ -3985,7 +4013,7 @@ void Map::RemoveCreatureRespawnTime(ObjectGuid::LowType dbGuid)
 {
     _creatureRespawnTimes.erase(dbGuid);
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CREATURE_RESPAWN);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CREATURE_RESPAWN);
     stmt->setUInt64(0, dbGuid);
     stmt->setUInt16(1, GetId());
     stmt->setUInt32(2, GetInstanceId());
@@ -4003,7 +4031,7 @@ void Map::SaveGORespawnTime(ObjectGuid::LowType dbGuid, time_t respawnTime)
 
     _goRespawnTimes[dbGuid] = respawnTime;
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_GO_RESPAWN);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_GO_RESPAWN);
     stmt->setUInt64(0, dbGuid);
     stmt->setUInt32(1, uint32(respawnTime));
     stmt->setUInt16(2, GetId());
@@ -4015,7 +4043,7 @@ void Map::RemoveGORespawnTime(ObjectGuid::LowType dbGuid)
 {
     _goRespawnTimes.erase(dbGuid);
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_GO_RESPAWN);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_GO_RESPAWN);
     stmt->setUInt64(0, dbGuid);
     stmt->setUInt16(1, GetId());
     stmt->setUInt32(2, GetInstanceId());
@@ -4024,7 +4052,7 @@ void Map::RemoveGORespawnTime(ObjectGuid::LowType dbGuid)
 
 void Map::LoadRespawnTimes()
 {
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CREATURE_RESPAWNS);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CREATURE_RESPAWNS);
     stmt->setUInt16(0, GetId());
     stmt->setUInt32(1, GetInstanceId());
     if (PreparedQueryResult result = CharacterDatabase.Query(stmt))
@@ -4065,7 +4093,7 @@ void Map::DeleteRespawnTimes()
 
 void Map::DeleteRespawnTimesInDB(uint16 mapId, uint32 instanceId)
 {
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CREATURE_RESPAWN_BY_INSTANCE);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CREATURE_RESPAWN_BY_INSTANCE);
     stmt->setUInt16(0, mapId);
     stmt->setUInt32(1, instanceId);
     CharacterDatabase.Execute(stmt);
@@ -4096,7 +4124,7 @@ void Map::LoadCorpseData()
 {
     std::unordered_map<ObjectGuid::LowType, std::unordered_set<uint32>> phases;
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CORPSE_PHASES);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CORPSE_PHASES);
     stmt->setUInt32(0, GetId());
     stmt->setUInt32(1, GetInstanceId());
 
@@ -4155,7 +4183,7 @@ void Map::LoadCorpseData()
 void Map::DeleteCorpseData()
 {
     // DELETE cp, c FROM corpse_phases cp INNER JOIN corpse c ON cp.OwnerGuid = c.guid WHERE c.mapId = ? AND c.instanceId = ?
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CORPSES_FROM_MAP);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CORPSES_FROM_MAP);
     stmt->setUInt32(0, GetId());
     stmt->setUInt32(1, GetInstanceId());
     CharacterDatabase.Execute(stmt);
@@ -4201,7 +4229,7 @@ Corpse* Map::ConvertCorpseToBones(ObjectGuid const& ownerGuid, bool insignia /*=
     RemoveCorpse(corpse);
 
     // remove corpse from DB
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
     corpse->DeleteFromDB(trans);
     CharacterDatabase.CommitTransaction(trans);
 

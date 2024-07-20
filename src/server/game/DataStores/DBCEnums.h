@@ -168,6 +168,17 @@ enum ArtifactPowerFlag : uint8
 
 #define BATTLE_PET_SPECIES_MAX_ID 2164
 
+enum BattlemasterListFlags
+{
+    BATTLEMASTER_LIST_FLAG_DISABLED             = 0x01,
+    BATTLEMASTER_LIST_FLAG_SKIP_ROLE_CHECK      = 0x02,
+    BATTLEMASTER_LIST_FLAG_UNK04                = 0x04,
+    BATTLEMASTER_LIST_FLAG_CAN_INIT_WAR_GAME    = 0x08,
+    BATTLEMASTER_LIST_FLAG_CAN_SPECIFIC_QUEUE   = 0x10,
+    BATTLEMASTER_LIST_FLAG_BRAWL                = 0x20,
+    BATTLEMASTER_LIST_FLAG_FACTIONAL            = 0x40
+};
+
 enum ChrSpecializationFlag
 {
     CHR_SPECIALIZATION_FLAG_CASTER                  = 0x01,
@@ -196,18 +207,21 @@ enum CriteriaCondition
 enum CriteriaAdditionalCondition
 {
     CRITERIA_ADDITIONAL_CONDITION_SOURCE_DRUNK_VALUE            = 1, // NYI
-    CRITERIA_ADDITIONAL_CONDITION_UNK2                          = 2,
+    CRITERIA_ADDITIONAL_CONDITION_SOURCE_PLAYER_CONDITION       = 2,
     CRITERIA_ADDITIONAL_CONDITION_ITEM_LEVEL                    = 3, // NYI
     CRITERIA_ADDITIONAL_CONDITION_TARGET_CREATURE_ENTRY         = 4,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_MUST_BE_PLAYER         = 5,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_MUST_BE_DEAD           = 6,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_MUST_BE_ENEMY          = 7,
     CRITERIA_ADDITIONAL_CONDITION_SOURCE_HAS_AURA               = 8,
+    CRITERIA_ADDITIONAL_CONDITION_SOURCE_HAS_AURA_TYPE          = 9,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_HAS_AURA               = 10,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_HAS_AURA_TYPE          = 11,
+    CRITERIA_ADDITIONAL_CONDITION_SOURCE_AURA_STATE             = 12,
+    CRITERIA_ADDITIONAL_CONDITION_TARGET_AURA_STATE             = 13,
     CRITERIA_ADDITIONAL_CONDITION_ITEM_QUALITY_MIN              = 14,
     CRITERIA_ADDITIONAL_CONDITION_ITEM_QUALITY_EQUALS           = 15,
-    CRITERIA_ADDITIONAL_CONDITION_UNK16                         = 16,
+    CRITERIA_ADDITIONAL_CONDITION_SOURCE_IS_ALIVE               = 16,
     CRITERIA_ADDITIONAL_CONDITION_SOURCE_AREA_OR_ZONE           = 17,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_AREA_OR_ZONE           = 18,
     CRITERIA_ADDITIONAL_CONDITION_MAP_DIFFICULTY_OLD            = 20,
@@ -229,7 +243,7 @@ enum CriteriaAdditionalCondition
     CRITERIA_ADDITIONAL_CONDITION_TARGET_LEVEL                  = 40,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_ZONE                   = 41,
     CRITERIA_ADDITIONAL_CONDITION_TARGET_HEALTH_PERCENT_BELOW   = 46,
-    CRITERIA_ADDITIONAL_CONDITION_UNK55                         = 55,
+    CRITERIA_ADDITIONAL_CONDITION_TARGET_PLAYER_CONDITION       = 55,
     CRITERIA_ADDITIONAL_CONDITION_MIN_ACHIEVEMENT_POINTS        = 56, // NYI
     CRITERIA_ADDITIONAL_CONDITION_REQUIRES_LFG_GROUP            = 58, // NYI
     CRITERIA_ADDITIONAL_CONDITION_UNK60                         = 60,
@@ -257,6 +271,9 @@ enum CriteriaAdditionalCondition
     //CRITERIA_ADDITIONAL_CONDITION_UNK87                         = 87, // Achievement id
     CRITERIA_ADDITIONAL_CONDITION_BATTLE_PET_SPECIES            = 91,
     CRITERIA_ADDITIONAL_CONDITION_EXPANSION                     = 92,
+    CRITERIA_ADDITIONAL_CONDITION_REWARDED_QUEST                = 110,
+    CRITERIA_ADDITIONAL_CONDITION_COMPLETED_QUEST               = 111,
+    CRITERIA_ADDITIONAL_CONDITION_COMPLETED_QUEST_OBJECTIVE     = 112, // QuestObjectiveID
     CRITERIA_ADDITIONAL_CONDITION_GARRISON_FOLLOWER_ENTRY       = 144,
     CRITERIA_ADDITIONAL_CONDITION_GARRISON_FOLLOWER_QUALITY     = 145,
     CRITERIA_ADDITIONAL_CONDITION_GARRISON_FOLLOWER_LEVEL       = 146,
@@ -265,6 +282,7 @@ enum CriteriaAdditionalCondition
     CRITERIA_ADDITIONAL_CONDITION_GARRISON_MISSION_TYPE         = 167, // NYI
     CRITERIA_ADDITIONAL_CONDITION_PLAYER_ITEM_LEVEL             = 169, // NYI
     CRITERIA_ADDITIONAL_CONDITION_GARRISON_FOLLOWER_ILVL        = 184,
+    CRITERIA_ADDITIONAL_CONDITION_USED_LEVEL_BOOST_LESS_THAN_HOURS_AGO = 188, // NYI
     CRITERIA_ADDITIONAL_CONDITION_HONOR_LEVEL                   = 193,
     CRITERIA_ADDITIONAL_CONDITION_PRESTIGE_LEVEL                = 194
 };
@@ -645,7 +663,6 @@ enum SpawnMask
 
 enum FactionTemplateFlags
 {
-    FACTION_TEMPLATE_ENEMY_SPAR             = 0x00000020,   // guessed, sparring with enemies?
     FACTION_TEMPLATE_FLAG_PVP               = 0x00000800,   // flagged for PvP
     FACTION_TEMPLATE_FLAG_CONTESTED_GUARD   = 0x00001000,   // faction will attack players that were involved in PvP combats
     FACTION_TEMPLATE_FLAG_HOSTILE_BY_DEFAULT= 0x00002000
@@ -842,6 +859,18 @@ enum PhaseUseFlagsValues : uint8
     PHASE_USE_FLAGS_ALL             = PHASE_USE_FLAGS_ALWAYS_VISIBLE | PHASE_USE_FLAGS_INVERSE
 };
 
+enum class PlayerConditionLfgStatus : uint8
+{
+    InLFGDungeon            = 1,
+    InLFGRandomDungeon      = 2,
+    InLFGFirstRandomDungeon = 3,
+    PartialClear            = 4,
+    StrangerCount           = 5,
+    VoteKickCount           = 6,
+    BootCount               = 7,
+    GearDiff                = 8
+};
+
 enum PrestigeLevelInfoFlags : uint8
 {
     PRESTIGE_FLAG_DISABLED  = 0x01                      // Prestige levels with this flag won't be included to calculate max prestigelevel.
@@ -984,7 +1013,8 @@ enum SummonPropFlags
     SUMMON_PROP_FLAG_UNK18           = 0x00020000,
     SUMMON_PROP_FLAG_UNK19           = 0x00040000,
     SUMMON_PROP_FLAG_UNK20           = 0x00080000,
-    SUMMON_PROP_FLAG_UNK21           = 0x00100000           // Totems
+    SUMMON_PROP_FLAG_UNK21           = 0x00100000,          // Totems
+    SUMMON_PROP_FLAG_COMPANION       = 0x00200000
 };
 
 #define MAX_TALENT_TIERS 7
@@ -1066,6 +1096,86 @@ enum CurrencyTypes
 enum WorldMapTransformsFlags
 {
     WORLD_MAP_TRANSFORMS_FLAG_DUNGEON   = 0x04
+};
+
+enum class WorldStateExpressionValueType : uint8
+{
+    Constant    = 1,
+    WorldState  = 2,
+    Function    = 3
+};
+
+enum class WorldStateExpressionLogic : uint8
+{
+    None    = 0,
+    And     = 1,
+    Or      = 2,
+    Xor     = 3,
+};
+
+enum class WorldStateExpressionComparisonType : uint8
+{
+    None            = 0,
+    Equal           = 1,
+    NotEqual        = 2,
+    Less            = 3,
+    LessOrEqual     = 4,
+    Greater         = 5,
+    GreaterOrEqual  = 6,
+};
+
+enum class WorldStateExpressionOperatorType : uint8
+{
+    None            = 0,
+    Sum             = 1,
+    Substraction    = 2,
+    Multiplication  = 3,
+    Division        = 4,
+    Remainder       = 5,
+};
+
+enum WorldStateExpressionFunctions
+{
+    WSE_FUNCTION_NONE = 0,
+    WSE_FUNCTION_RANDOM,
+    WSE_FUNCTION_MONTH,
+    WSE_FUNCTION_DAY,
+    WSE_FUNCTION_TIME_OF_DAY,
+    WSE_FUNCTION_REGION,
+    WSE_FUNCTION_CLOCK_HOUR,
+    WSE_FUNCTION_OLD_DIFFICULTY_ID,
+    WSE_FUNCTION_HOLIDAY_START,
+    WSE_FUNCTION_HOLIDAY_LEFT,
+    WSE_FUNCTION_HOLIDAY_ACTIVE,
+    WSE_FUNCTION_TIMER_CURRENT_TIME,
+    WSE_FUNCTION_WEEK_NUMBER,
+    WSE_FUNCTION_UNK13,
+    WSE_FUNCTION_UNK14,
+    WSE_FUNCTION_DIFFICULTY_ID,
+    WSE_FUNCTION_WAR_MODE_ACTIVE,
+    WSE_FUNCTION_UNK17,
+    WSE_FUNCTION_UNK18,
+    WSE_FUNCTION_UNK19,
+    WSE_FUNCTION_UNK20,
+    WSE_FUNCTION_UNK21,
+    WSE_FUNCTION_WORLD_STATE_EXPRESSION,
+    WSE_FUNCTION_KEYSTONE_AFFIX,
+    WSE_FUNCTION_UNK24,
+    WSE_FUNCTION_UNK25,
+    WSE_FUNCTION_UNK26,
+    WSE_FUNCTION_UNK27,
+    WSE_FUNCTION_KEYSTONE_LEVEL,
+    WSE_FUNCTION_UNK29,
+    WSE_FUNCTION_UNK30,
+    WSE_FUNCTION_UNK31,
+    WSE_FUNCTION_UNK32,
+    WSE_FUNCTION_MERSENNE_RANDOM,
+    WSE_FUNCTION_UNK34,
+    WSE_FUNCTION_UNK35,
+    WSE_FUNCTION_UNK36,
+    WSE_FUNCTION_UI_WIDGET_DATA,
+
+    WSE_FUNCTION_MAX,
 };
 
 #endif

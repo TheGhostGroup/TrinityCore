@@ -1,6 +1,4 @@
-# ![logo](https://community.trinitycore.org/public/style_images/1_trinitycore.png) TrinityCore (master)
-
-[![Average time to resolve an issue](https://isitmaintained.com/badge/resolution/TrinityCore/TrinityCore.svg)](https://isitmaintained.com/project/TrinityCore/TrinityCore "Average time to resolve an issue") [![Percentage of issues still open](https://isitmaintained.com/badge/open/TrinityCore/TrinityCore.svg)](https://isitmaintained.com/project/TrinityCore/TrinityCore "Percentage of issues still open")
+# ![logo](https://community.trinitycore.org/public/style_images/1_trinitycore.png) TrinityCore (7.3.5v2)
 
 --------------
 
@@ -15,16 +13,6 @@
 * [Authors &amp; Contributors](#authors--contributors)
 * [Links](#links)
 
-
-
-## Build Status
-
-master | 3.3.5
-:------------: | :------------:
-[![master Build Status](https://travis-ci.org/TrinityCore/TrinityCore.svg?branch=master)](https://travis-ci.org/TrinityCore/TrinityCore) | [![3.3.5 Build Status](https://travis-ci.org/TrinityCore/TrinityCore.svg?branch=3.3.5)](https://travis-ci.org/TrinityCore/TrinityCore)
-[![master Build status](https://ci.appveyor.com/api/projects/status/54d0u1fxe50ad80o/branch/master?svg=true)](https://ci.appveyor.com/project/DDuarte/trinitycore/branch/master) | [![Build status](https://ci.appveyor.com/api/projects/status/54d0u1fxe50ad80o/branch/3.3.5?svg=true)](https://ci.appveyor.com/project/DDuarte/trinitycore/branch/3.3.5)
-[![Coverity Scan Build Status](https://scan.coverity.com/projects/435/badge.svg)](https://scan.coverity.com/projects/435) | [![Coverity Scan Build Status](https://scan.coverity.com/projects/4656/badge.svg)](https://scan.coverity.com/projects/4656)
-
 ## Introduction
 
 TrinityCore is a *MMORPG* Framework based mostly in C++.
@@ -37,23 +25,23 @@ mechanics and functionality.
 It is completely open source; community involvement is highly encouraged.
 
 If you wish to contribute ideas or code, please visit our site linked below or
-make pull requests to our [Github repository](https://github.com/TrinityCore/TrinityCore/pulls).
+make pull requests to our [Github repository](https://github.com/LegionEmulationProject/TrinityCore/pulls).
 
 For further information on the TrinityCore project, please visit our project
 website at [TrinityCore.org](https://www.trinitycore.org).
 
 ## Requirements
-
-
-Software requirements are available in the [wiki](https://www.trinitycore.info/display/tc/Requirements) for
-Windows, Linux and macOS.
-
+```shell
+-Ubuntu Server 19.10 (No Version Before or After is Currently Supported. Full build instructions to come)
+-Visual Studio 2019 Latest
+-Boost 1.67 on Linux. Boost 1.71 on Windows
+-MySQL 5.7 & 8.0
+-OpenSSL 1.1.1 Only
+```
 
 ## Install
 
-Detailed installation guides are available in the [wiki](https://www.trinitycore.info/display/tc/Installation+Guide) for
-Windows, Linux and macOS.
-
+To come!
 
 ## Reporting issues
 
@@ -83,7 +71,7 @@ Read file [COPYING](COPYING).
 
 ## Authors &amp; Contributors
 
-Read file [THANKS](THANKS).
+Read file [AUTHORS](AUTHORS).
 
 
 ## Links

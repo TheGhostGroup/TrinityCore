@@ -59,7 +59,8 @@ enum HunterSpells
     SPELL_HUNTER_SNIPER_TRAINING_BUFF_R1            = 64418,
     SPELL_HUNTER_STEADY_SHOT_FOCUS                  = 77443,
     SPELL_HUNTER_T9_4P_GREATNESS                    = 68130,
-    SPELL_ROAR_OF_SACRIFICE_TRIGGERED               = 67481
+    SPELL_HUNTER_BEAST_CLEAVE                       = 115939,
+    SPELL_ROAR_OF_SACRIFICE_TRIGGERED               = 67481,
 };
 
 enum MiscSpells
@@ -594,9 +595,22 @@ class spell_hun_multi_shot : public SpellScriptLoader
                     GetCaster()->CastSpell(GetCaster(), SPELL_HUNTER_MULTI_SHOT_FOCUS, true);
             }
 
+            void HandleOnCast()
+            {
+                Unit* caster = GetCaster();
+                if (caster->GetTypeId() == TYPEID_PLAYER && caster->GetUInt32Value(PLAYER_FIELD_CURRENT_SPEC_ID) == TALENT_SPEC_HUNTER_BEASTMASTER &&
+                    caster->HasSpell(SPELL_HUNTER_BEAST_CLEAVE))
+                {
+                    Pet* pet = ((Player*)caster)->GetPet();
+                    if (pet && pet->IsHunterPet())
+                        caster->CastSpell(pet, SPELL_HUNTER_BEAST_CLEAVE, true);
+                }
+            }
+
             void Register() override
             {
                 OnHit += SpellHitFn(spell_hun_multi_shot_SpellScript::HandleOnHit);
+                OnCast += SpellCastFn(spell_hun_multi_shot_SpellScript::HandleOnCast);
             }
         };
 

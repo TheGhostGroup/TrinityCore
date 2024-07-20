@@ -397,7 +397,7 @@ enum AuraType : uint32
     SPELL_AURA_324                                          = 324,  // spell critical chance (probably by school mask)
     SPELL_AURA_325                                          = 325,  // Not used in 4.3.4
     SPELL_AURA_PHASE_GROUP                                  = 326,  // Puts the player in all the phases that are in the group with id = miscB
-    SPELL_AURA_327                                          = 327,  // Not used in 4.3.4
+    SPELL_AURA_PHASE_ALWAYS_VISIBLE                         = 327,  // Sets PhaseShiftFlags::AlwaysVisible
     SPELL_AURA_TRIGGER_SPELL_ON_POWER_PCT                   = 328,  // NYI Triggers spell when power goes above (MiscB = 0) or falls below (MiscB = 1) specified percent value (once, not every time condition has meet)
     SPELL_AURA_MOD_POWER_GAIN_PCT                           = 329,  // NYI
     SPELL_AURA_CAST_WHILE_WALKING                           = 330,
@@ -424,14 +424,14 @@ enum AuraType : uint32
     SPELL_AURA_351                                          = 351,
     SPELL_AURA_352                                          = 352,
     SPELL_AURA_MOD_CAMOUFLAGE                               = 353,  // NYI
-    SPELL_AURA_354                                          = 354,  // Restoration Shaman mastery - mod healing based on target's health (less = more healing)
+    SPELL_AURA_MOD_HEALING_DONE_PCT_VERSUS_TARGET_HEALTH    = 354,  // Restoration Shaman mastery - mod healing based on target's health (less = more healing)
     SPELL_AURA_MOD_CASTING_SPEED                            = 355,  // NYI
     SPELL_AURA_356                                          = 356,  // Arcane Mage mastery - mod damage based on current mana
     SPELL_AURA_ENABLE_BOSS1_UNIT_FRAME                      = 357,
     SPELL_AURA_WORGEN_ALTERED_FORM                          = 358,
     SPELL_AURA_359                                          = 359,
     SPELL_AURA_PROC_TRIGGER_SPELL_COPY                      = 360,  // Procs the same spell that caused this proc (Dragonwrath, Tarecgosa's Rest)
-    SPELL_AURA_OVERRIDE_AUTOATTACK_WITH_MELEE_SPELL         = 361,  // NYI
+    SPELL_AURA_OVERRIDE_AUTOATTACK_WITH_MELEE_SPELL         = 361,
     SPELL_AURA_362                                          = 362,  // Not used in 4.3.4
     SPELL_AURA_MOD_NEXT_SPELL                               = 363,  // Used by 101601 Throw Totem - causes the client to initialize spell cast with specified spell
     SPELL_AURA_364                                          = 364,  // Not used in 4.3.4

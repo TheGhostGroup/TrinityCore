@@ -24,6 +24,7 @@
 #include "CinematicMgr.h"
 #include "Common.h"
 #include "Creature.h"
+#include "GameTime.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceScenario.h"
 #include "Item.h"
@@ -50,6 +51,17 @@
 #include "World.h"
 #include "WorldSession.h"
 #include <G3D/Vector3.h>
+#include <sstream>
+
+constexpr float VisibilityDistances[AsUnderlyingType(VisibilityDistanceType::Max)] =
+{
+    DEFAULT_VISIBILITY_DISTANCE,
+    VISIBILITY_DISTANCE_TINY,
+    VISIBILITY_DISTANCE_SMALL,
+    VISIBILITY_DISTANCE_LARGE,
+    VISIBILITY_DISTANCE_GIGANTIC,
+    MAX_VISIBILITY_DISTANCE
+};
 
 Object::Object()
 {
@@ -489,7 +501,7 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         if (go && go->ToTransport())                                    // ServerTime
             *data << uint32(go->GetGOValue()->Transport.PathProgress);
         else
-            *data << uint32(getMSTime());
+            *data << uint32(GameTime::GetGameTimeMS());
     }
 
     if (VehicleCreate)
@@ -540,9 +552,9 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         bool hasMorphCurveID        = areaTriggerMiscTemplate->MorphCurveId != 0;
         bool hasFacingCurveID       = areaTriggerMiscTemplate->FacingCurveId != 0;
         bool hasMoveCurveID         = areaTriggerMiscTemplate->MoveCurveId != 0;
-        bool hasUnk2                = areaTriggerTemplate->HasFlag(AREATRIGGER_FLAG_UNK2);
+        bool hasAnimation           = areaTriggerTemplate->HasFlag(AREATRIGGER_FLAG_HAS_ANIM_ID);
         bool hasUnk3                = areaTriggerTemplate->HasFlag(AREATRIGGER_FLAG_UNK3);
-        bool hasUnk4                = areaTriggerTemplate->HasFlag(AREATRIGGER_FLAG_UNK4);
+        bool hasAnimKitID           = areaTriggerTemplate->HasFlag(AREATRIGGER_FLAG_HAS_ANIM_KIT_ID);
         bool hasAreaTriggerSphere   = areaTriggerTemplate->IsSphere();
         bool hasAreaTriggerBox      = areaTriggerTemplate->IsBox();
         bool hasAreaTriggerPolygon  = areaTriggerTemplate->IsPolygon();
@@ -561,9 +573,9 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         data->WriteBit(hasMorphCurveID);
         data->WriteBit(hasFacingCurveID);
         data->WriteBit(hasMoveCurveID);
-        data->WriteBit(hasUnk2);
+        data->WriteBit(hasAnimation);
         data->WriteBit(hasUnk3);
-        data->WriteBit(hasUnk4);
+        data->WriteBit(hasAnimKitID);
         data->WriteBit(hasAreaTriggerSphere);
         data->WriteBit(hasAreaTriggerBox);
         data->WriteBit(hasAreaTriggerPolygon);
@@ -599,11 +611,11 @@ void Object::BuildMovementUpdate(ByteBuffer* data, uint32 flags) const
         if (hasMoveCurveID)
             *data << uint32(areaTriggerMiscTemplate->MoveCurveId);
 
-        if (hasUnk2)
-            *data << int32(0);
+        if (hasAnimation)
+            *data << int32(areaTriggerMiscTemplate->AnimId);
 
-        if (hasUnk4)
-            *data << uint32(0);
+        if (hasAnimKitID)
+            *data << int32(areaTriggerMiscTemplate->AnimKitId);
 
         if (hasAreaTriggerSphere)
         {
@@ -1593,6 +1605,15 @@ void WorldObject::setActive(bool on)
     }
 }
 
+void WorldObject::SetVisibilityDistanceOverride(VisibilityDistanceType type)
+{
+    ASSERT(type < VisibilityDistanceType::Max);
+    if (GetTypeId() == TYPEID_PLAYER)
+        return;
+
+    m_visibilityDistanceOverride = VisibilityDistances[AsUnderlyingType(type)];
+}
+
 void WorldObject::CleanupsBeforeDelete(bool /*finalCleanup*/)
 {
     if (IsInWorld())
@@ -1625,6 +1646,21 @@ uint32 WorldObject::GetAreaId() const
 void WorldObject::GetZoneAndAreaId(uint32& zoneid, uint32& areaid) const
 {
     GetMap()->GetZoneAndAreaId(GetPhaseShift(), zoneid, areaid, m_positionX, m_positionY, m_positionZ);
+}
+
+bool WorldObject::IsInWorldPvpZone() const
+{
+    switch (GetZoneId())
+    {
+    case 4197: // Wintergrasp
+    case 5095: // Tol Barad
+    case 6941: // Ashran
+        return true;
+        break;
+    default:
+        return false;
+        break;
+    }
 }
 
 InstanceScript* WorldObject::GetInstanceScript()
@@ -2018,28 +2054,25 @@ void WorldObject::UpdateAllowedPositionZ(float x, float y, float &z) const
 
 float WorldObject::GetGridActivationRange() const
 {
-    if (ToPlayer())
+    if (isActiveObject())
     {
-        if (ToPlayer()->GetCinematicMgr()->IsOnCinematic())
-            return DEFAULT_VISIBILITY_INSTANCE;
+        if (GetTypeId() == TYPEID_PLAYER && ToPlayer()->GetCinematicMgr()->IsOnCinematic())
+            return std::max(DEFAULT_VISIBILITY_INSTANCE, GetMap()->GetVisibilityRange());
+
         return GetMap()->GetVisibilityRange();
     }
-    else if (ToCreature())
-        return ToCreature()->m_SightDistance;
-    else if (ToDynObject())
-    {
-        if (isActiveObject())
-            return GetMap()->GetVisibilityRange();
-        else
-            return 0.0f;
-    }
-    else
-        return 0.0f;
+
+    if (Creature const* thisCreature = ToCreature())
+        return thisCreature->m_SightDistance;
+
+    return 0.0f;
 }
 
 float WorldObject::GetVisibilityRange() const
 {
-    if (isActiveObject() && !ToPlayer())
+    if (IsVisibilityOverridden() && !ToPlayer())
+        return *m_visibilityDistanceOverride;
+    else if (isActiveObject() && !ToPlayer())
         return MAX_VISIBILITY_DISTANCE;
     else
         return GetMap()->GetVisibilityRange();
@@ -2051,7 +2084,9 @@ float WorldObject::GetSightRange(const WorldObject* target) const
     {
         if (ToPlayer())
         {
-            if (target && target->isActiveObject() && !target->ToPlayer())
+            if (target && target->IsVisibilityOverridden() && !target->ToPlayer())
+                return *target->m_visibilityDistanceOverride;
+            else if (target && target->isActiveObject() && !target->ToPlayer())
                 return MAX_VISIBILITY_DISTANCE;
             else if (ToPlayer()->GetCinematicMgr()->IsOnCinematic())
                 return DEFAULT_VISIBILITY_INSTANCE;
@@ -2353,7 +2388,7 @@ void WorldObject::AddObjectToRemoveList()
     map->AddObjectToRemoveList(this);
 }
 
-TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropertiesEntry const* properties /*= NULL*/, uint32 duration /*= 0*/, Unit* summoner /*= NULL*/, uint32 spellId /*= 0*/, uint32 vehId /*= 0*/, bool visibleBySummonerOnly /*= false*/)
+TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropertiesEntry const* properties /*= nullptr*/, uint32 duration /*= 0*/, Unit* summoner /*= nullptr*/, uint32 spellId /*= 0*/, uint32 vehId /*= 0*/, bool visibleBySummonerOnly /*= false*/)
 {
     uint32 mask = UNIT_MASK_SUMMON;
     if (properties)
@@ -2373,22 +2408,22 @@ TempSummon* Map::SummonCreature(uint32 entry, Position const& pos, SummonPropert
             case SUMMON_CATEGORY_ALLY:
             case SUMMON_CATEGORY_UNK:
             {
-                switch (properties->Title)
+                switch (SummonTitle(properties->Title))
                 {
-                case SUMMON_TYPE_MINION:
-                case SUMMON_TYPE_GUARDIAN:
-                case SUMMON_TYPE_GUARDIAN2:
+                case SummonTitle::Minion:
+                case SummonTitle::Guardian:
+                case SummonTitle::Runeblade:
                     mask = UNIT_MASK_GUARDIAN;
                     break;
-                case SUMMON_TYPE_TOTEM:
-                case SUMMON_TYPE_LIGHTWELL:
+                case SummonTitle::Totem:
+                case SummonTitle::Lightwell:
                     mask = UNIT_MASK_TOTEM;
                     break;
-                case SUMMON_TYPE_VEHICLE:
-                case SUMMON_TYPE_VEHICLE2:
+                case SummonTitle::Vehicle:
+                case SummonTitle::Mount:
                     mask = UNIT_MASK_SUMMON;
                     break;
-                case SUMMON_TYPE_MINIPET:
+                case SummonTitle::Companion:
                     mask = UNIT_MASK_MINION;
                     break;
                 default:
@@ -2568,7 +2603,7 @@ Creature* WorldObject::SummonTrigger(float x, float y, float z, float ang, uint3
     TempSummonType summonType = (duration == 0) ? TEMPSUMMON_DEAD_DESPAWN : TEMPSUMMON_TIMED_DESPAWN;
     Creature* summon = SummonCreature(WORLD_TRIGGER, x, y, z, ang, summonType, duration);
     if (!summon)
-        return NULL;
+        return nullptr;
 
     //summon->SetName(GetName());
     if (GetTypeId() == TYPEID_PLAYER || GetTypeId() == TYPEID_UNIT)
@@ -2607,7 +2642,7 @@ void WorldObject::SummonCreatureGroup(uint8 group, std::list<TempSummon*>* list 
 
 Creature* WorldObject::FindNearestCreature(uint32 entry, float range, bool alive) const
 {
-    Creature* creature = NULL;
+    Creature* creature = nullptr;
     Trinity::NearestCreatureEntryWithLiveStateInObjectRangeCheck checker(*this, entry, alive, range);
     Trinity::CreatureLastSearcher<Trinity::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(this, creature, checker);
     Cell::VisitAllObjects(this, searcher, range);
@@ -2616,7 +2651,7 @@ Creature* WorldObject::FindNearestCreature(uint32 entry, float range, bool alive
 
 GameObject* WorldObject::FindNearestGameObject(uint32 entry, float range) const
 {
-    GameObject* go = NULL;
+    GameObject* go = nullptr;
     Trinity::NearestGameObjectEntryInObjectRangeCheck checker(*this, entry, range);
     Trinity::GameObjectLastSearcher<Trinity::NearestGameObjectEntryInObjectRangeCheck> searcher(this, go, checker);
     Cell::VisitGridObjects(this, searcher, range);
@@ -2625,11 +2660,22 @@ GameObject* WorldObject::FindNearestGameObject(uint32 entry, float range) const
 
 GameObject* WorldObject::FindNearestGameObjectOfType(GameobjectTypes type, float range) const
 {
-    GameObject* go = NULL;
+    GameObject* go = nullptr;
     Trinity::NearestGameObjectTypeInObjectRangeCheck checker(*this, type, range);
     Trinity::GameObjectLastSearcher<Trinity::NearestGameObjectTypeInObjectRangeCheck> searcher(this, go, checker);
     Cell::VisitGridObjects(this, searcher, range);
     return go;
+}
+
+Player* WorldObject::SelectNearestPlayer(float distance) const
+{
+    Player* target = nullptr;
+
+    Trinity::NearestPlayerInObjectRangeCheck checker(this, distance);
+    Trinity::PlayerLastSearcher<Trinity::NearestPlayerInObjectRangeCheck> searcher(this, target, checker);
+    Cell::VisitGridObjects(this, searcher, distance);
+
+    return target;
 }
 
 template <typename Container>
@@ -2704,7 +2750,7 @@ void WorldObject::GetNearPoint(WorldObject const* /*searcher*/, float &x, float 
 void WorldObject::GetClosePoint(float &x, float &y, float &z, float size, float distance2d /*= 0*/, float angle /*= 0*/) const
 {
     // angle calculated from current orientation
-    GetNearPoint(NULL, x, y, z, size, distance2d, GetOrientation() + angle);
+    GetNearPoint(nullptr, x, y, z, size, distance2d, GetOrientation() + angle);
 }
 
 Position WorldObject::GetNearPosition(float dist, float angle)

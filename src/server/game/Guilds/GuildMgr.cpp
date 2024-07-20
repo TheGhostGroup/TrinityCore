@@ -204,7 +204,7 @@ void GuildMgr::LoadGuilds()
         CharacterDatabase.DirectExecute("DELETE gm FROM guild_member_withdraw gm LEFT JOIN guild_member g ON gm.guid = g.guid WHERE g.guid IS NULL");
 
                                                 //           0           1        2     3      4        5       6       7       8       9       10
-        QueryResult result = CharacterDatabase.Query("SELECT gm.guildid, gm.guid, rank, pnote, offnote, w.tab0, w.tab1, w.tab2, w.tab3, w.tab4, w.tab5, "
+        QueryResult result = CharacterDatabase.Query("SELECT gm.guildid, gm.guid, `rank`, pnote, offnote, w.tab0, w.tab1, w.tab2, w.tab3, w.tab4, w.tab5, "
                                                 //    11      12      13       14      15       16       17        18      19         20
                                                      "w.tab6, w.tab7, w.money, c.name, c.level, c.class, c.gender, c.zone, c.account, c.logout_time "
                                                      "FROM guild_member gm "
@@ -459,7 +459,7 @@ void GuildMgr::LoadGuilds()
         PreparedQueryResult criteriaResult;
         for (GuildContainer::const_iterator itr = GuildStore.begin(); itr != GuildStore.end(); ++itr)
         {
-            PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_GUILD_ACHIEVEMENT);
+            CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_GUILD_ACHIEVEMENT);
             stmt->setUInt64(0, itr->first);
             achievementResult = CharacterDatabase.Query(stmt);
             stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_GUILD_ACHIEVEMENT_CRITERIA);
@@ -515,7 +515,7 @@ void GuildMgr::LoadGuildRewards()
         Field* fields = result->Fetch();
         reward.ItemID        = fields[0].GetUInt32();
         reward.MinGuildRep   = fields[1].GetUInt8();
-        reward.RaceMask      = fields[2].GetUInt64();
+        reward.RaceMask.RawValue = fields[2].GetUInt64();
         reward.Cost          = fields[3].GetUInt64();
 
         if (!sObjectMgr->GetItemTemplate(reward.ItemID))
@@ -530,7 +530,7 @@ void GuildMgr::LoadGuildRewards()
             continue;
         }
 
-        PreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_GUILD_REWARDS_REQ_ACHIEVEMENTS);
+        WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_GUILD_REWARDS_REQ_ACHIEVEMENTS);
         stmt->setUInt32(0, reward.ItemID);
         PreparedQueryResult reqAchievementResult = WorldDatabase.Query(stmt);
         if (reqAchievementResult)

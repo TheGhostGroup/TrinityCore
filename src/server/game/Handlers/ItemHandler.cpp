@@ -29,6 +29,7 @@
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "SpellMgr.h"
 #include "WorldSession.h"
 
 void WorldSession::HandleSplitItemOpcode(WorldPackets::Item::SplitItem& splitItem)
@@ -858,9 +859,9 @@ void WorldSession::HandleWrapItem(WorldPackets::Item::WrapItem& packet)
         return;
     }
 
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHAR_GIFT);
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHAR_GIFT);
     stmt->setUInt64(0, item->GetOwnerGUID().GetCounter());
     stmt->setUInt64(1, item->GetGUID().GetCounter());
     stmt->setUInt32(2, item->GetEntry());
@@ -1193,14 +1194,12 @@ void WorldSession::HandleUseCritterItem(WorldPackets::Item::UseCritterItem& useC
         return;
 
     int32 spellToLearn = item->GetTemplate()->Effects[1]->SpellID;
-    for (BattlePetSpeciesEntry const* entry : sBattlePetSpeciesStore)
+
+
+    if (BattlePetSpeciesEntry const* entry = sSpellMgr->GetBattlePetSpecies(uint32(spellToLearn)))
     {
-        if (entry->SummonSpellID == spellToLearn)
-        {
-            GetBattlePetMgr()->AddPet(entry->ID, entry->CreatureID, BattlePetMgr::RollPetBreed(entry->ID), BattlePetMgr::GetDefaultPetQuality(entry->ID));
-            _player->UpdateCriteria(CRITERIA_TYPE_OWN_BATTLE_PET_COUNT);
-            break;
-        }
+        GetBattlePetMgr()->AddPet(entry->ID, entry->CreatureID, BattlePetMgr::RollPetBreed(entry->ID), BattlePetMgr::GetDefaultPetQuality(entry->ID));
+        _player->UpdateCriteria(CRITERIA_TYPE_OWN_BATTLE_PET_COUNT);
     }
 
     _player->DestroyItem(item->GetBagSlot(), item->GetSlot(), true);

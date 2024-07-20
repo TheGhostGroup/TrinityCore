@@ -36,6 +36,7 @@
 #endif
 
 DB2Storage<AchievementEntry>                    sAchievementStore("Achievement.db2", AchievementLoadInfo::Instance());
+DB2Storage<AdventureJournalEntry>               sAdventureJournalStore("AdventureJournal.db2", AdventureJournalLoadInfo::Instance());
 DB2Storage<AnimKitEntry>                        sAnimKitStore("AnimKit.db2", AnimKitLoadInfo::Instance());
 DB2Storage<AreaGroupMemberEntry>                sAreaGroupMemberStore("AreaGroupMember.db2", AreaGroupMemberLoadInfo::Instance());
 DB2Storage<AreaTableEntry>                      sAreaTableStore("AreaTable.db2", AreaTableLoadInfo::Instance());
@@ -245,6 +246,7 @@ DB2Storage<SpellShapeshiftEntry>                sSpellShapeshiftStore("SpellShap
 DB2Storage<SpellShapeshiftFormEntry>            sSpellShapeshiftFormStore("SpellShapeshiftForm.db2", SpellShapeshiftFormLoadInfo::Instance());
 DB2Storage<SpellTargetRestrictionsEntry>        sSpellTargetRestrictionsStore("SpellTargetRestrictions.db2", SpellTargetRestrictionsLoadInfo::Instance());
 DB2Storage<SpellTotemsEntry>                    sSpellTotemsStore("SpellTotems.db2", SpellTotemsLoadInfo::Instance());
+DB2Storage<SpellVisualKitEntry>                 sSpellVisualKitStore("SpellVisualKit.db2", SpellVisualKitLoadInfo::Instance());
 DB2Storage<SpellXSpellVisualEntry>              sSpellXSpellVisualStore("SpellXSpellVisual.db2", SpellXSpellVisualLoadInfo::Instance());
 DB2Storage<SummonPropertiesEntry>               sSummonPropertiesStore("SummonProperties.db2", SummonPropertiesLoadInfo::Instance());
 DB2Storage<TactKeyEntry>                        sTactKeyStore("TactKey.db2", TactKeyLoadInfo::Instance());
@@ -269,6 +271,7 @@ DB2Storage<WorldMapAreaEntry>                   sWorldMapAreaStore("WorldMapArea
 DB2Storage<WorldMapOverlayEntry>                sWorldMapOverlayStore("WorldMapOverlay.db2", WorldMapOverlayLoadInfo::Instance());
 DB2Storage<WorldMapTransformsEntry>             sWorldMapTransformsStore("WorldMapTransforms.db2", WorldMapTransformsLoadInfo::Instance());
 DB2Storage<WorldSafeLocsEntry>                  sWorldSafeLocsStore("WorldSafeLocs.db2", WorldSafeLocsLoadInfo::Instance());
+DB2Storage<WorldStateExpressionEntry>           sWorldStateExpressionStore("WorldStateExpression.db2", WorldStateExpressionLoadInfo::Instance());
 
 TaxiMask                                        sTaxiNodesMask;
 TaxiMask                                        sOldContinentsNodesMask;
@@ -477,6 +480,7 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
 #define LOAD_DB2(store) LoadDB2(availableDb2Locales, bad_db2_files, _stores, &store, db2Path, defaultLocale, store)
 
     LOAD_DB2(sAchievementStore);
+    LOAD_DB2(sAdventureJournalStore);
     LOAD_DB2(sAnimKitStore);
     LOAD_DB2(sAreaGroupMemberStore);
     LOAD_DB2(sAreaTableStore);
@@ -685,6 +689,7 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
     LOAD_DB2(sSpellShapeshiftFormStore);
     LOAD_DB2(sSpellTargetRestrictionsStore);
     LOAD_DB2(sSpellTotemsStore);
+    LOAD_DB2(sSpellVisualKitStore);
     LOAD_DB2(sSpellXSpellVisualStore);
     LOAD_DB2(sSummonPropertiesStore);
     LOAD_DB2(sTactKeyStore);
@@ -709,6 +714,7 @@ void DB2Manager::LoadStores(std::string const& dataPath, uint32 defaultLocale)
     LOAD_DB2(sWorldMapOverlayStore);
     LOAD_DB2(sWorldMapTransformsStore);
     LOAD_DB2(sWorldSafeLocsStore);
+    LOAD_DB2(sWorldStateExpressionStore);
 
 #undef LOAD_DB2
 
@@ -2064,7 +2070,7 @@ SkillRaceClassInfoEntry const* DB2Manager::GetSkillRaceClassInfo(uint32 skill, u
     auto bounds = _skillRaceClassInfoBySkill.equal_range(skill);
     for (auto itr = bounds.first; itr != bounds.second; ++itr)
     {
-        if (itr->second->RaceMask && !(itr->second->RaceMask & (UI64LIT(1) << (race - 1))))
+        if (itr->second->RaceMask && !(itr->second->RaceMask.HasRace(race)))
             continue;
         if (itr->second->ClassMask && !(itr->second->ClassMask & (1 << (class_ - 1))))
             continue;

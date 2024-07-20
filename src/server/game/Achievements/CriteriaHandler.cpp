@@ -107,7 +107,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Class);
                 return false;
             }
-            if (ClassRace.Race && ((1 << (ClassRace.Race-1)) & RACEMASK_ALL_PLAYABLE) == 0)
+            if (!Trinity::RaceMask<uint64>{ RACEMASK_ALL_PLAYABLE }.HasRace(ClassRace.Race))
             {
                 TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_T_PLAYER_CLASS_RACE (%u) contains a non-existing race in value2 (%u), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Race);
@@ -252,7 +252,7 @@ bool CriteriaData::IsValid(Criteria const* criteria)
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Class);
                 return false;
             }
-            if (ClassRace.Race && ((1 << (ClassRace.Race-1)) & RACEMASK_ALL_PLAYABLE) == 0)
+            if (ClassRace.Race && ((UI64LIT(1) << (ClassRace.Race-1)) & RACEMASK_ALL_PLAYABLE) == 0)
             {
                 TC_LOG_ERROR("sql.sql", "Table `criteria_data` (Entry: %u Type: %u) for data type CRITERIA_DATA_TYPE_S_PLAYER_CLASS_RACE (%u) contains a non-existing race entry in value2 (%u), ignored.",
                     criteria->ID, criteria->Entry->Type, DataType, ClassRace.Race);
@@ -639,7 +639,11 @@ void CriteriaHandler::UpdateCriteria(CriteriaTypes type, uint64 miscValue1 /*= 0
                     for (SkillLineAbilityMap::const_iterator skillIter = bounds.first; skillIter != bounds.second; ++skillIter)
                     {
                         if (skillIter->second->SkillLine == int32(criteria->Entry->Asset.SkillID))
-                            spellCount++;
+                        {
+                            // do not add couter twice if by any chance skill is listed twice in dbc (eg. skill 777 and spell 22717)
+                            ++spellCount;
+                            break;
+                        }
                     }
                 }
                 SetCriteriaProgress(criteria, spellCount, referencePlayer);
@@ -1574,6 +1578,13 @@ bool CriteriaHandler::AdditionalRequirementsSatisfied(ModifierTreeNode const* tr
 
     switch (CriteriaAdditionalCondition(reqType))
     {
+        case CRITERIA_ADDITIONAL_CONDITION_SOURCE_PLAYER_CONDITION: // 2
+        {
+            PlayerConditionEntry const* playerCondition = sPlayerConditionStore.LookupEntry(reqValue);
+            if (!playerCondition || !ConditionMgr::IsPlayerMeetingCondition(referencePlayer, playerCondition))
+                return false;
+            break;
+        }
         case CRITERIA_ADDITIONAL_CONDITION_ITEM_LEVEL: // 3
         {
             // miscValue1 is itemid
@@ -1602,12 +1613,24 @@ bool CriteriaHandler::AdditionalRequirementsSatisfied(ModifierTreeNode const* tr
             if (!referencePlayer->HasAura(reqValue))
                 return false;
             break;
+        case CRITERIA_ADDITIONAL_CONDITION_SOURCE_HAS_AURA_TYPE: // 9
+            if (!referencePlayer->HasAuraType(AuraType(reqValue)))
+                return false;
+            break;
         case CRITERIA_ADDITIONAL_CONDITION_TARGET_HAS_AURA: // 10
             if (!unit || !unit->HasAura(reqValue))
                 return false;
             break;
         case CRITERIA_ADDITIONAL_CONDITION_TARGET_HAS_AURA_TYPE: // 11
             if (!unit || !unit->HasAuraType(AuraType(reqValue)))
+                return false;
+            break;
+        case CRITERIA_ADDITIONAL_CONDITION_SOURCE_AURA_STATE: // 12
+            if (!referencePlayer->HasAuraState(AuraStateType(reqValue)))
+                return false;
+            break;
+        case CRITERIA_ADDITIONAL_CONDITION_TARGET_AURA_STATE: // 13
+            if (!unit || !unit->HasAuraState(AuraStateType(reqValue)))
                 return false;
             break;
         case CRITERIA_ADDITIONAL_CONDITION_ITEM_QUALITY_MIN: // 14
@@ -1711,6 +1734,16 @@ bool CriteriaHandler::AdditionalRequirementsSatisfied(ModifierTreeNode const* tr
             if (!unit || unit->GetHealthPct() >= reqValue)
                 return false;
             break;
+        case CRITERIA_ADDITIONAL_CONDITION_TARGET_PLAYER_CONDITION: // 55
+        {
+            if (!unit || !unit->IsPlayer())
+                return false;
+
+            PlayerConditionEntry const* playerCondition = sPlayerConditionStore.LookupEntry(reqValue);
+            if (!playerCondition || !ConditionMgr::IsPlayerMeetingCondition(unit->ToPlayer(), playerCondition))
+                return false;
+            break;
+        }
         case CRITERIA_ADDITIONAL_CONDITION_RATED_BATTLEGROUND_RATING: // 64
             if (referencePlayer->GetRBGPersonalRating() < reqValue)
                 return false;
@@ -1726,6 +1759,23 @@ bool CriteriaHandler::AdditionalRequirementsSatisfied(ModifierTreeNode const* tr
             if (miscValue1 != reqValue)
                 return false;
             break;
+        case CRITERIA_ADDITIONAL_CONDITION_REWARDED_QUEST: // 110
+            if (!referencePlayer->GetQuestRewardStatus(reqValue))
+                return false;
+            break;
+        case CRITERIA_ADDITIONAL_CONDITION_COMPLETED_QUEST: // 111
+            if (referencePlayer->GetQuestStatus(reqValue) != QUEST_STATUS_COMPLETE)
+                return false;
+            break;
+        case CRITERIA_ADDITIONAL_CONDITION_COMPLETED_QUEST_OBJECTIVE: // 112
+        {
+            QuestObjective const* objective = sObjectMgr->GetQuestObjective(reqValue);
+            if (!objective)
+                return false;
+            if (referencePlayer->GetQuestRewardStatus(objective->QuestID) || !referencePlayer->IsQuestObjectiveComplete(*objective))
+                return false;
+            break;
+        }
         case CRITERIA_ADDITIONAL_CONDITION_GARRISON_FOLLOWER_ENTRY: // 144
         {
             if (!referencePlayer)
@@ -1776,6 +1826,8 @@ bool CriteriaHandler::AdditionalRequirementsSatisfied(ModifierTreeNode const* tr
                 return false;
             break;
         }
+        case CRITERIA_ADDITIONAL_CONDITION_USED_LEVEL_BOOST_LESS_THAN_HOURS_AGO: // 188
+            return false;
         case CRITERIA_ADDITIONAL_CONDITION_HONOR_LEVEL: // 193
             if (!referencePlayer || referencePlayer->GetHonorLevel() != reqValue)
                 return false;

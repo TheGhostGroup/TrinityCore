@@ -20,6 +20,7 @@
 
 #include "Define.h"
 #include "DBCEnums.h"
+#include "RaceMask.h"
 #include "Util.h"
 
 #pragma pack(push, 1)
@@ -44,6 +45,34 @@ struct AchievementEntry
     int32 IconFileID;
     uint32 CriteriaTree;
 };
+
+struct AdventureJournalEntry
+{
+    uint32 ID;
+    LocalizedString* Name_Lang;
+    LocalizedString* Description_Lang;
+    LocalizedString* ButtonText_Lang;
+    LocalizedString* RewardDescription_Lang;
+    LocalizedString* ContinueDescription_Lang;
+    uint32 TextureFileDataID;
+    uint32 ItemID;
+    uint16 LfgDungeonID;
+    uint16 QuestID;
+    uint16 BattleMasterListID;
+    uint16 BonusPlayerConditionID[2];
+    uint16 CurrencyType;
+    uint16 WorldMapAreaID;
+    uint8 Type;
+    uint8 Flags;
+    uint8 ButtonActionType;
+    uint8 PriorityMin;
+    uint8 PriorityMax;
+    uint8 BonusValue[2];
+    uint8 CurrencyQuantity;
+    uint32 PlayerConditionID;
+    uint32 ItemQuantity;
+};
+
 
 struct AnimKitEntry
 {
@@ -905,7 +934,7 @@ struct DurabilityQualityEntry
 struct EmotesEntry
 {
     uint32 ID;
-    int64 RaceMask;
+    Trinity::RaceMask<int64> RaceMask;
     char const* EmoteSlashCommand;
     uint32 EmoteFlags;
     uint32 SpellVisualKitID;
@@ -935,7 +964,7 @@ struct EmotesTextSoundEntry
 
 struct FactionEntry
 {
-    int64 ReputationRaceMask[4];
+    Trinity::RaceMask<int64> ReputationRaceMask[4];
     LocalizedString* Name;
     LocalizedString* Description;
     uint32 ID;
@@ -1014,7 +1043,6 @@ struct FactionTemplateEntry
         return EnemyGroup == 0 && FriendGroup == 0;
     }
     bool IsContestedGuardFaction() const { return (Flags & FACTION_TEMPLATE_FLAG_CONTESTED_GUARD) != 0; }
-    bool ShouldSparAttack() const { return (Flags & FACTION_TEMPLATE_ENEMY_SPAR) != 0; }
 };
 
 struct GameObjectDisplayInfoEntry
@@ -1575,7 +1603,7 @@ struct ItemRandomSuffixEntry
 
 struct ItemSearchNameEntry
 {
-    int64 AllowableRace;
+    Trinity::RaceMask<int64> AllowableRace;
     LocalizedString* Display;
     uint32 ID;
     int32 Flags[3];
@@ -1615,7 +1643,7 @@ struct ItemSetSpellEntry
 struct ItemSparseEntry
 {
     uint32 ID;
-    int64 AllowableRace;
+    Trinity::RaceMask<int64> AllowableRace;
     LocalizedString* Display;
     LocalizedString* Display1;
     LocalizedString* Display2;
@@ -2015,7 +2043,7 @@ struct PhaseXPhaseGroupEntry
 
 struct PlayerConditionEntry
 {
-    int64 RaceMask;
+    Trinity::RaceMask<int64> RaceMask;
     LocalizedString* FailureDescription;
     uint32 ID;
     uint8 Flags;
@@ -2355,7 +2383,7 @@ struct SkillLineEntry
 
 struct SkillLineAbilityEntry
 {
-    int64 RaceMask;
+    Trinity::RaceMask<int64> RaceMask;
     uint32 ID;
     int32 Spell;
     int32 SupercedesSpell;
@@ -2374,7 +2402,7 @@ struct SkillLineAbilityEntry
 struct SkillRaceClassInfoEntry
 {
     uint32 ID;
-    int64 RaceMask;
+    Trinity::RaceMask<int64> RaceMask;
     int16 SkillID;
     uint16 Flags;
     int16 SkillTierID;
@@ -2783,6 +2811,16 @@ struct SpellTotemsEntry
     uint16 RequiredTotemCategoryID[MAX_SPELL_TOTEMS];
 };
 
+struct SpellVisualKitEntry
+{
+    int32 ID;
+    int32 Flags;
+    float FallbackPriority;
+    int32 FallbackSpellVisualKitId;
+    uint16 DelayMin;
+    uint16 DelayMax;
+};
+
 struct SpellXSpellVisualEntry
 {
     uint32 SpellVisualID;
@@ -3159,6 +3197,12 @@ struct WorldSafeLocsEntry
     DBCPosition3D Loc;
     float Facing;
     uint16 MapID;
+};
+
+struct WorldStateExpressionEntry
+{
+    uint32 ID;
+    char const* Expression;
 };
 
 #pragma pack(pop)

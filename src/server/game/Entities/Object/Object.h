@@ -26,6 +26,7 @@
 #include "MovementInfo.h"
 #include "ObjectDefines.h"
 #include "ObjectGuid.h"
+#include "Optional.h"
 #include "PhaseShift.h"
 #include "Position.h"
 #include "SharedDefines.h"
@@ -426,6 +427,7 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
         uint32 GetZoneId() const;
         uint32 GetAreaId() const;
         void GetZoneAndAreaId(uint32& zoneid, uint32& areaid) const;
+        bool IsInWorldPvpZone() const;
 
         InstanceScript* GetInstanceScript();
 
@@ -514,6 +516,7 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
         Creature*   FindNearestCreature(uint32 entry, float range, bool alive = true) const;
         GameObject* FindNearestGameObject(uint32 entry, float range) const;
         GameObject* FindNearestGameObjectOfType(GameobjectTypes type, float range) const;
+        Player* SelectNearestPlayer(float distance) const;
 
         template <typename Container>
         void GetGameObjectListWithEntryInGrid(Container& gameObjectContainer, uint32 entry, float maxSearchRange = 250.0f) const;
@@ -545,6 +548,8 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
 
         bool isActiveObject() const { return m_isActive; }
         void setActive(bool isActiveObject);
+        bool IsVisibilityOverridden() const { return m_visibilityDistanceOverride.is_initialized(); }
+        void SetVisibilityDistanceOverride(VisibilityDistanceType type);
         void SetWorldObject(bool apply);
         bool IsPermanentWorldObject() const { return m_isWorldObject; }
         bool IsWorldObject() const;
@@ -577,6 +582,7 @@ class TC_GAME_API WorldObject : public Object, public WorldLocation
     protected:
         std::string m_name;
         bool m_isActive;
+        Optional<float> m_visibilityDistanceOverride;
         const bool m_isWorldObject;
         ZoneScript* m_zoneScript;
 

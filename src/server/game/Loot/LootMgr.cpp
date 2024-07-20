@@ -312,7 +312,7 @@ bool LootStoreItem::IsValid(LootStore const& store, uint32 entry) const
         ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemid);
         if (!proto)
         {
-            TC_LOG_ERROR("sql.sql", "Table '%s' Entry %d Item %d: item entry not listed in `item_template` - skipped", store.GetName(), entry, itemid);
+            TC_LOG_ERROR("sql.sql", "Table '%s' Entry %d Item %d: item does not exist - skipped", store.GetName(), entry, itemid);
             return false;
         }
 
@@ -806,6 +806,9 @@ void LoadLootTemplates_Creature()
 
     for (LootIdSet::const_iterator itr = lootIdSetUsed.begin(); itr != lootIdSetUsed.end(); ++itr)
         lootIdSet.erase(*itr);
+
+    // 1 means loot for player corpse
+    lootIdSet.erase(PLAYER_CORPSE_LOOT_ENTRY);
 
     // output error for any still listed (not referenced from appropriate table) ids
     LootTemplates_Creature.ReportUnusedIds(lootIdSet);

@@ -51,6 +51,44 @@ struct AchievementLoadInfo
     }
 };
 
+struct AdventureJournalLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { true, FT_INT, "ID" },
+            { false, FT_STRING, "Name_Lang" },
+            { false, FT_STRING, "Description_Lang" },
+            { false, FT_STRING, "ButtonText_Lang" },
+            { false, FT_STRING, "RewardDescription_Lang" },
+            { false, FT_STRING, "ContinueDescription_Lang" },
+            { true, FT_INT, "TextureFileDataID" },
+            { true, FT_INT, "ItemID" },
+            { false, FT_SHORT, "LfgDungeonID" },
+            { false, FT_SHORT, "QuestID" },
+            { false, FT_SHORT, "BattleMasterListID" },
+            { false, FT_SHORT, "BonusPlayerConditionID1" },
+            { false, FT_SHORT, "BonusPlayerConditionID2" },
+            { false, FT_SHORT, "CurrencyType" },
+            { false, FT_SHORT, "WorldMapAreaID" },
+            { false, FT_BYTE, "Type" },
+            { false, FT_BYTE, "Flags" },
+            { false, FT_BYTE, "ButtonActionType" },
+            { false, FT_BYTE, "PriorityMin" },
+            { false, FT_BYTE, "PriorityMax" },
+            { false, FT_BYTE, "BonusValue1" },
+            { false, FT_BYTE, "BonusValue2" },
+            { false, FT_BYTE, "CurrencyQuantity" },
+            { true, FT_INT, "PlayerConditionID" },
+            { true, FT_INT, "ItemQuantity" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, AdventureJournalMeta::Instance(), HOTFIX_SEL_ADVENTURE_JOURNAL);
+        // TODO Hotfix table
+        return &loadInfo;
+    }
+};
+
 struct AnimKitLoadInfo
 {
     static DB2LoadInfo const* Instance()
@@ -4815,6 +4853,24 @@ struct SpellTotemsLoadInfo
     }
 };
 
+struct SpellVisualKitLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { true, FT_INT, "ID" },
+            { true, FT_INT, "Flags" },
+            { false, FT_FLOAT, "FallbackPriority" },
+            { true, FT_INT, "FallbackSpellVisualKitId" },
+            { false, FT_SHORT, "DelayMin" },
+            { false, FT_SHORT, "DelayMax" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, SpellVisualKitMeta::Instance(), HOTFIX_SEL_SPELL_VISUAL_KIT);
+        return &loadInfo;
+    }
+};
+
 struct SpellXSpellVisualLoadInfo
 {
     static DB2LoadInfo const* Instance()
@@ -5421,6 +5477,20 @@ struct WorldSafeLocsLoadInfo
             { false, FT_SHORT, "MapID" },
         };
         static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, WorldSafeLocsMeta::Instance(), HOTFIX_SEL_WORLD_SAFE_LOCS);
+        return &loadInfo;
+    }
+};
+
+struct WorldStateExpressionLoadInfo
+{
+    static DB2LoadInfo const* Instance()
+    {
+        static DB2FieldMeta const fields[] =
+        {
+            { false, FT_INT, "ID" },
+            { false, FT_STRING_NOT_LOCALIZED, "Expression" },
+        };
+        static DB2LoadInfo const loadInfo(&fields[0], std::extent<decltype(fields)>::value, WorldStateExpressionMeta::Instance(), HOTFIX_SEL_WORLD_STATE_EXPRESSION);
         return &loadInfo;
     }
 };

@@ -24,6 +24,7 @@ Quest support: 3628.
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "SpellScript.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "Group.h"
 
@@ -79,7 +80,94 @@ class spell_razelikh_teleport_group : public SpellScriptLoader
         }
 };
 
+enum Zidormi
+{
+
+    MAP_BLASTED_LANDS_PHASE   = 1190,
+    MAP_EASTERN_KINGDOMS      = 0,
+    SPELL_TIME_TRAVELLING     = 176111
+};
+
+// Need to update this with non hard coded gossip.
+class npc_zidormi_blasted_lands : public CreatureScript
+{
+public:
+    npc_zidormi_blasted_lands() : CreatureScript("npc_zidormi_blasted_lands") { }
+
+    struct npc_zidormi_blasted_landsAI : public ScriptedAI
+    {
+        npc_zidormi_blasted_landsAI(Creature* creature) : ScriptedAI(creature) { }
+
+        bool GossipHello(Player* player)
+        {
+            if (player->getLevel() < 90)
+                return true;
+
+            if (player->GetMapId() == MAP_BLASTED_LANDS_PHASE)
+            {
+                AddGossipItemFor(player, GOSSIP_ICON_CHAT, "I would like to visit the past", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 0);
+            }
+            else if (player->GetMapId() == MAP_EASTERN_KINGDOMS)
+            {
+                AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Return to the present", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
+            }
+
+            SendGossipMenuFor(player, player->GetGossipTextId(me), me->GetGUID());
+
+            return true;
+        }
+
+        bool GossipSelect(Player* player, uint32 /*menuId*/, uint32 gossipListId)
+        {
+            uint32 const action = player->PlayerTalkClass->GetGossipOptionAction(gossipListId);
+            ClearGossipMenuFor(player);
+
+            if (action == GOSSIP_ACTION_INFO_DEF + 0)
+            {
+                CloseGossipMenuFor(player);
+
+                player->CastSpell(player, SPELL_TIME_TRAVELLING, true);
+                player->SeamlessTeleportToMap(MAP_EASTERN_KINGDOMS);
+            }
+            else if (action == GOSSIP_ACTION_INFO_DEF + 1)
+            {
+                CloseGossipMenuFor(player);
+
+                player->RemoveAurasDueToSpell(SPELL_TIME_TRAVELLING);
+                player->SeamlessTeleportToMap(MAP_BLASTED_LANDS_PHASE);
+            }
+
+            return true;
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_zidormi_blasted_landsAI(creature);
+    }
+};
+
+enum DreanorIntro
+{
+    SCENE_ENTER_THE_PORTAL    = 185,
+    SPELL_TELEPORT_TO_TANAAN  = 167771,
+};
+
+class player_teleport_to_tanaan : public PlayerScript
+{
+public:
+    player_teleport_to_tanaan() : PlayerScript("player_teleport_to_tanaan") { }
+
+    void OnMovieComplete(Player* player, uint32 movieId) override
+    {
+        if (movieId == SCENE_ENTER_THE_PORTAL)
+            player->CastSpell(player, SPELL_TELEPORT_TO_TANAAN);
+    }
+};
+
 void AddSC_blasted_lands()
 {
     new spell_razelikh_teleport_group();
+    new npc_zidormi_blasted_lands();
+    new player_teleport_to_tanaan();
 }

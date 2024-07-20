@@ -52,6 +52,7 @@ class Player;
 class Quest;
 class ScriptMgr;
 class Spell;
+class SpellInfo;
 class SpellScript;
 class SpellCastTargets;
 class Transport;
@@ -388,6 +389,9 @@ class TC_GAME_API ItemScript : public ScriptObject
 
         // Called when the item is destroyed.
         virtual bool OnRemove(Player* /*player*/, Item* /*item*/) { return false; }
+
+        // Called before casting a combat spell from this item (chance on hit spells of item template, can be used to prevent cast if returning false)
+        virtual bool OnCastItemCombatSpell(Player* /*player*/, Unit* /*victim*/, SpellInfo const* /*spellInfo*/, Item* /*item*/) { return true; }
 };
 
 class TC_GAME_API UnitScript : public ScriptObject
@@ -410,7 +414,7 @@ class TC_GAME_API UnitScript : public ScriptObject
         virtual void ModifyMeleeDamage(Unit* /*target*/, Unit* /*attacker*/, uint32& /*damage*/) { }
 
         // Called when Spell Damage is being Dealt
-        virtual void ModifySpellDamageTaken(Unit* /*target*/, Unit* /*attacker*/, int32& /*damage*/) { }
+        virtual void ModifySpellDamageTaken(Unit* /*target*/, Unit* /*attacker*/, int32& /*damage*/, SpellInfo const* /*spellInfo*/) { }
 };
 
 class TC_GAME_API CreatureScript : public UnitScript, public UpdatableScript<Creature>
@@ -753,6 +757,9 @@ class TC_GAME_API PlayerScript : public UnitScript
         // Called after a player's quest status has been changed
         virtual void OnQuestStatusChange(Player* /*player*/, uint32 /*questId*/) { }
 
+        // Called when a player presses release when he died
+        virtual void OnPlayerRepop(Player* /*player*/) { }
+
         // Called when a player completes a movie
         virtual void OnMovieComplete(Player* /*player*/, uint32 /*movieId*/) { }
 
@@ -1025,6 +1032,7 @@ class TC_GAME_API ScriptMgr
         bool OnItemUse(Player* player, Item* item, SpellCastTargets const& targets, ObjectGuid castId);
         bool OnItemExpire(Player* player, ItemTemplate const* proto);
         bool OnItemRemove(Player* player, Item* item);
+        bool OnCastItemCombatSpell(Player* player, Unit* victim, SpellInfo const* spellInfo, Item* item);
 
     public: /* CreatureScript */
 
@@ -1145,6 +1153,7 @@ class TC_GAME_API ScriptMgr
         void OnPlayerBindToInstance(Player* player, Difficulty difficulty, uint32 mapid, bool permanent, uint8 extendState);
         void OnPlayerUpdateZone(Player* player, uint32 newZone, uint32 newArea);
         void OnQuestStatusChange(Player* player, uint32 questId);
+        void OnPlayerRepop(Player* player);
         void OnMovieComplete(Player* player, uint32 movieId);
         void OnPlayerChoiceResponse(Player* player, uint32 choiceId, uint32 responseId);
 
@@ -1186,7 +1195,7 @@ class TC_GAME_API ScriptMgr
         void OnDamage(Unit* attacker, Unit* victim, uint32& damage);
         void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker, uint32& damage);
         void ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage);
-        void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage);
+        void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage, SpellInfo const* spellInfo);
 
     public: /* AreaTriggerEntityScript */
 

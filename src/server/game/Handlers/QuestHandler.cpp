@@ -104,11 +104,8 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPackets::Quest::QuestG
 {
     TC_LOG_DEBUG("network", "WORLD: Received CMSG_QUESTGIVER_ACCEPT_QUEST %s, quest = %u, startcheat = %u", packet.QuestGiverGUID.ToString().c_str(), packet.QuestID, packet.StartCheat);
 
-    Object* object;
-    if (!packet.QuestGiverGUID.IsPlayer())
-        object = ObjectAccessor::GetObjectByTypeMask(*_player, packet.QuestGiverGUID, TYPEMASK_UNIT | TYPEMASK_GAMEOBJECT | TYPEMASK_ITEM);
-    else
-        object = ObjectAccessor::FindPlayer(packet.QuestGiverGUID);
+    Object* object = ObjectAccessor::GetObjectByTypeMask(*_player, packet.QuestGiverGUID, TYPEMASK_UNIT | TYPEMASK_GAMEOBJECT | TYPEMASK_ITEM | TYPEMASK_PLAYER);
+
 
 #define CLOSE_GOSSIP_CLEAR_DIVIDER() \
     do { \
@@ -116,33 +113,22 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPackets::Quest::QuestG
         _player->SetDivider(ObjectGuid::Empty); \
     } while (0)
 
-    // no or incorrect quest giver
     if (!object)
     {
         CLOSE_GOSSIP_CLEAR_DIVIDER();
         return;
     }
 
-    if (Player* playerQuestObject = object->ToPlayer())
+    if ((!object->IsPlayer() && !object->hasQuest(packet.QuestID)))
     {
-        if ((_player->GetDivider().IsEmpty() && _player->GetDivider() != packet.QuestGiverGUID) || !playerQuestObject->CanShareQuest(packet.QuestID))
-        {
-            CLOSE_GOSSIP_CLEAR_DIVIDER();
-            return;
-        }
-        if (!_player->IsInSameRaidWith(playerQuestObject))
-        {
-            CLOSE_GOSSIP_CLEAR_DIVIDER();
-            return;
-        }
+        CLOSE_GOSSIP_CLEAR_DIVIDER();
+        return;
     }
-    else
+
+    if (object->IsPlayer() && object != _player && !object->ToPlayer()->CanShareQuest(packet.QuestID))
     {
-        if (!object->hasQuest(packet.QuestID))
-        {
-            CLOSE_GOSSIP_CLEAR_DIVIDER();
-            return;
-        }
+        CLOSE_GOSSIP_CLEAR_DIVIDER();
+        return;
     }
 
     // some kind of WPE protection
@@ -200,9 +186,6 @@ void WorldSession::HandleQuestgiverAcceptQuestOpcode(WorldPackets::Quest::QuestG
             }
 
             _player->PlayerTalkClass->SendCloseGossip();
-
-            if (quest->GetSrcSpell() > 0)
-                _player->CastSpell(_player, quest->GetSrcSpell(), true);
 
             return;
         }
@@ -463,7 +446,7 @@ void WorldSession::HandleQuestLogRemoveQuest(WorldPackets::Quest::QuestLogRemove
             if (sWorld->getBoolConfig(CONFIG_QUEST_ENABLE_QUEST_TRACKER)) // check if Quest Tracker is enabled
             {
                 // prepare Quest Tracker datas
-                PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_QUEST_TRACK_ABANDON_TIME);
+                CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_QUEST_TRACK_ABANDON_TIME);
                 stmt->setUInt32(0, questId);
                 stmt->setUInt64(1, _player->GetGUID().GetCounter());
 

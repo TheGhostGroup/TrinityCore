@@ -29,6 +29,7 @@
 #include "Corpse.h"
 #include "DatabaseEnv.h"
 #include "DB2Stores.h"
+#include "GameTime.h"
 #include "GossipDef.h"
 #include "Group.h"
 #include "Guild.h"
@@ -49,6 +50,7 @@
 #include "ScriptMgr.h"
 #include "Spell.h"
 #include "SpellPackets.h"
+#include "WhoListStorage.h"
 #include "WhoPackets.h"
 #include "World.h"
 #include "WorldPacket.h"
@@ -88,7 +90,7 @@ void WorldSession::HandleWhoOpcode(WorldPackets::Who::WhoRequestPkt& whoRequest)
 
     TC_LOG_DEBUG("network", "WorldSession::HandleWhoOpcode: MinLevel: %u, MaxLevel: %u, Name: %s (VirtualRealmName: %s), Guild: %s (GuildVirtualRealmName: %s), RaceFilter: " UI64FMTD ", ClassFilter: %d, Areas: " SZFMTD ", Words: " SZFMTD ".",
         request.MinLevel, request.MaxLevel, request.Name.c_str(), request.VirtualRealmName.c_str(), request.Guild.c_str(), request.GuildVirtualRealmName.c_str(),
-        request.RaceFilter, request.ClassFilter, whoRequest.Areas.size(), request.Words.size());
+        request.RaceFilter.RawValue, request.ClassFilter, whoRequest.Areas.size(), request.Words.size());
 
     // zones count, client limit = 10 (2.0.10)
     // can't be received from real client or broken packet
@@ -140,64 +142,46 @@ void WorldSession::HandleWhoOpcode(WorldPackets::Who::WhoRequestPkt& whoRequest)
 
     WorldPackets::Who::WhoResponsePkt response;
 
-    boost::shared_lock<boost::shared_mutex> lock(*HashMapHolder<Player>::GetLock());
-
-    HashMapHolder<Player>::MapType const& m = ObjectAccessor::GetPlayers();
-    for (HashMapHolder<Player>::MapType::const_iterator itr = m.begin(); itr != m.end(); ++itr)
+    WhoListInfoVector const& whoList = sWhoListStorageMgr->GetWhoList();
+    for (WhoListPlayerInfo const& target : whoList)
     {
-        Player* target = itr->second;
         // player can see member of other team only if has RBAC_PERM_TWO_SIDE_WHO_LIST
-        if (target->GetTeam() != team && !HasPermission(rbac::RBAC_PERM_TWO_SIDE_WHO_LIST))
+        if (target.GetTeam() != team && !HasPermission(rbac::RBAC_PERM_TWO_SIDE_WHO_LIST))
             continue;
 
         // player can see MODERATOR, GAME MASTER, ADMINISTRATOR only if has RBAC_PERM_WHO_SEE_ALL_SEC_LEVELS
-        if (target->GetSession()->GetSecurity() > AccountTypes(gmLevelInWhoList) && !HasPermission(rbac::RBAC_PERM_WHO_SEE_ALL_SEC_LEVELS))
-            continue;
-
-        // do not process players which are not in world
-        if (!target->IsInWorld())
+        if (target.GetSecurity() > AccountTypes(gmLevelInWhoList) && !HasPermission(rbac::RBAC_PERM_WHO_SEE_ALL_SEC_LEVELS))
             continue;
 
         // check if target is globally visible for player
-        if (!target->IsVisibleGloballyFor(_player))
-            continue;
+        if (_player->GetGUID() != target.GetGuid() && !target.IsVisible())
+            if (AccountMgr::IsPlayerAccount(_player->GetSession()->GetSecurity()) || target.GetSecurity() > _player->GetSession()->GetSecurity())
+                continue;
 
         // check if target's level is in level range
-        uint8 lvl = target->getLevel();
+        uint8 lvl = target.GetLevel();
         if (lvl < request.MinLevel || lvl > request.MaxLevel)
             continue;
 
         // check if class matches classmask
-        if (request.ClassFilter >= 0 && !(request.ClassFilter & (1 << target->getClass())))
+        if (request.ClassFilter >= 0 && !(request.ClassFilter & (1 << target.GetClass())))
             continue;
 
         // check if race matches racemask
-        if (request.RaceFilter >= 0 && !(request.RaceFilter & (SI64LIT(1) << target->getRace())))
+        if (!request.RaceFilter.HasRace(target.GetRace()))
             continue;
 
         if (!whoRequest.Areas.empty())
         {
-            if (std::find(whoRequest.Areas.begin(), whoRequest.Areas.end(), target->GetZoneId()) == whoRequest.Areas.end())
+            if (std::find(whoRequest.Areas.begin(), whoRequest.Areas.end(), target.GetZoneId()) == whoRequest.Areas.end())
                 continue;
         }
 
-        std::wstring wTargetName;
-
-        if (!Utf8toWStr(target->GetName(), wTargetName))
+        std::wstring const& wTargetName = target.GetWidePlayerName();
+        if (!(wPlayerName.empty() || wTargetName.find(wPlayerName) != std::wstring::npos))
             continue;
 
-        wstrToLower(wTargetName);
-
-        if (!wPlayerName.empty() && wTargetName.find(wPlayerName) == std::wstring::npos)
-            continue;
-
-        Guild* targetGuild = target->GetGuild();
-        std::wstring wTargetGuildName;
-
-        if (!Utf8toWStr(targetGuild ? targetGuild->GetName() : "", wTargetGuildName))
-            continue;
-
-        wstrToLower(wTargetGuildName);
+        std::wstring const& wTargetGuildName = target.GetWideGuildName();
 
         if (!wGuildName.empty() && wTargetGuildName.find(wGuildName) == std::wstring::npos)
             continue;
@@ -205,7 +189,7 @@ void WorldSession::HandleWhoOpcode(WorldPackets::Who::WhoRequestPkt& whoRequest)
         if (!wWords.empty())
         {
             std::string aName;
-            if (AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(target->GetZoneId()))
+            if (AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(target.GetZoneId()))
                 aName = areaEntry->AreaName->Str[GetSessionDbcLocale()];
 
             bool show = false;
@@ -228,18 +212,18 @@ void WorldSession::HandleWhoOpcode(WorldPackets::Who::WhoRequestPkt& whoRequest)
         }
 
         WorldPackets::Who::WhoEntry whoEntry;
-        if (!whoEntry.PlayerData.Initialize(target->GetGUID(), target))
+        if (!whoEntry.PlayerData.Initialize(target.GetGuid(), nullptr))
             continue;
 
-        if (targetGuild)
+        if (!target.GetGuildGuid().IsEmpty())
         {
-            whoEntry.GuildGUID = targetGuild->GetGUID();
+            whoEntry.GuildGUID = target.GetGuildGuid();
             whoEntry.GuildVirtualRealmAddress = GetVirtualRealmAddress();
-            whoEntry.GuildName = targetGuild->GetName();
+            whoEntry.GuildName = target.GetGuildName();
         }
 
-        whoEntry.AreaID = target->GetZoneId();
-        whoEntry.IsGM = target->IsGameMaster();
+        whoEntry.AreaID = target.GetZoneId();
+        whoEntry.IsGM = target.IsGameMaster();
 
         response.Response.Entries.push_back(whoEntry);
 
@@ -734,7 +718,7 @@ void WorldSession::HandleCompleteCinematic(WorldPackets::Misc::CompleteCinematic
 void WorldSession::HandleNextCinematicCamera(WorldPackets::Misc::NextCinematicCamera& /*packet*/)
 {
     // Sent by client when cinematic actually begun. So we begin the server side process
-    GetPlayer()->GetCinematicMgr()->BeginCinematic();
+    GetPlayer()->GetCinematicMgr()->NextCinematicCamera();
 }
 
 void WorldSession::HandleCompleteMovie(WorldPackets::Misc::CompleteMovie& /*packet*/)
@@ -792,7 +776,7 @@ void WorldSession::HandleWhoIsOpcode(WorldPackets::Who::WhoIsRequest& packet)
         return;
     }
 
-    PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_WHOIS);
+    LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_WHOIS);
     stmt->setUInt32(0, player->GetSession()->GetAccountId());
 
     PreparedQueryResult result = LoginDatabase.Query(stmt);
@@ -867,7 +851,7 @@ void WorldSession::HandleTimeSyncResponse(WorldPackets::Misc::TimeSyncResponse& 
 
     TC_LOG_DEBUG("network", "Time sync received: counter %u, client ticks %u, time since last sync %u", packet.SequenceIndex, packet.ClientTime, packet.ClientTime - _player->m_timeSyncClient);
 
-    uint32 ourTicks = packet.ClientTime + (getMSTime() - _player->m_timeSyncServer);
+    uint32 ourTicks = packet.ClientTime + (GameTime::GetGameTimeMS() - _player->m_timeSyncServer);
 
     // diff should be small
     TC_LOG_DEBUG("network", "Our ticks: %u, diff %u, latency %u", ourTicks, ourTicks - packet.ClientTime, GetLatency());
@@ -1163,3 +1147,35 @@ void WorldSession::HandleCloseInteraction(WorldPackets::Misc::CloseInteraction& 
     if (_player->PlayerTalkClass->GetInteractionData().SourceGuid == closeInteraction.SourceGuid)
         _player->PlayerTalkClass->GetInteractionData().Reset();
 }
+
+void WorldSession::HandleSelectFactionOpcode(WorldPackets::Misc::FactionSelect& selectFaction)
+{
+    enum FactionSelection
+    {
+        JOIN_HORDE      = 0,
+        JOIN_ALLIANCE   = 1
+    };
+
+    if (_player->getRace() != RACE_PANDAREN_NEUTRAL)
+        return;
+
+    if (selectFaction.FactionChoice == JOIN_ALLIANCE)
+    {
+        _player->SetByteValue(UNIT_FIELD_BYTES_0, 0, RACE_PANDAREN_ALLIANCE);
+        _player->setFactionForRace(RACE_PANDAREN_ALLIANCE);
+        _player->SaveToDB();
+        _player->LearnSpell(668, false);            // Language Common
+        _player->LearnSpell(108130, false);         // Language Pandaren Alliance
+        _player->CastSpell(_player, 113244, true);  // Faction Choice Trigger Spell: Alliance
+    }
+    else if (selectFaction.FactionChoice == JOIN_HORDE)
+    {
+        _player->SetByteValue(UNIT_FIELD_BYTES_0, 0, RACE_PANDAREN_HORDE);
+        _player->setFactionForRace(RACE_PANDAREN_HORDE);
+        _player->SaveToDB();
+        _player->LearnSpell(669, false);            // Language Orcish
+        _player->LearnSpell(108131, false);         // Language Pandaren Horde
+        _player->CastSpell(_player, 113245, true);  // Faction Choice Trigger Spell: Horde
+    }
+}
+

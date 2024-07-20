@@ -113,7 +113,7 @@ enum ItemSpelltriggerType
      * death" of spell 57348 makes me think so)
      */
     ITEM_SPELLTRIGGER_ON_OBTAIN       = 5,
-    ITEM_SPELLTRIGGER_LEARN_SPELL_ID  = 6                   // used in item_template.spell_2 with spell_id with SPELL_GENERIC_LEARN in spell_1
+    ITEM_SPELLTRIGGER_LEARN_SPELL_ID  = 6                   // used in ItemEffect in second slot with spell_id with SPELL_GENERIC_LEARN in spell_1
 };
 
 #define MAX_ITEM_SPELLTRIGGER           7
@@ -625,9 +625,9 @@ enum ItemSubclassPermanent
 
 enum ItemSubclassJunk
 {
-    ITEM_SUBCLASS_MISCELLANEOUS_JUNK                 = 0,
+    ITEM_SUBCLASS_MISCELLANEOUS_JUNK            = 0,
     ITEM_SUBCLASS_MISCELLANEOUS_REAGENT         = 1,
-    ITEM_SUBCLASS_MISCELLANEOUS_COMPANION_PET             = 2,
+    ITEM_SUBCLASS_MISCELLANEOUS_COMPANION_PET   = 2,
     ITEM_SUBCLASS_MISCELLANEOUS_HOLIDAY         = 3,
     ITEM_SUBCLASS_MISCELLANEOUS_OTHER           = 4,
     ITEM_SUBCLASS_MISCELLANEOUS_MOUNT           = 5,
@@ -721,7 +721,7 @@ struct TC_GAME_API ItemTemplate
     uint32 GetSellPrice() const { return ExtendedData->SellPrice; }
     InventoryType GetInventoryType() const { return InventoryType(ExtendedData->InventoryType); }
     int32 GetAllowableClass() const { return ExtendedData->AllowableClass; }
-    int64 GetAllowableRace() const { return ExtendedData->AllowableRace; }
+    Trinity::RaceMask<int64> GetAllowableRace() const { return ExtendedData->AllowableRace; }
     uint32 GetBaseItemLevel() const { return ExtendedData->ItemLevel; }
     int32 GetBaseRequiredLevel() const { return ExtendedData->RequiredLevel; }
     uint32 GetRequiredSkill() const { return ExtendedData->RequiredSkill; }

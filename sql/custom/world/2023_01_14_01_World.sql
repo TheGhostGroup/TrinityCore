@@ -1,0 +1,1 @@
+UPDATE `conditions` SET `ConditionValue1`=44120 WHERE `SourceTypeOrReferenceId` = 26 AND `SourceGroup`=7510;

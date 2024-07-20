@@ -199,7 +199,7 @@ void WorldSession::HandleQueryCorpseLocation(WorldPackets::Query::QueryCorpseLoc
             if (corpseMapEntry->IsDungeon() && corpseMapEntry->CorpseMapID >= 0)
             {
                 // if corpse map have entrance
-                if (Map const* entranceMap = sMapMgr->CreateBaseMap(corpseMapEntry->CorpseMapID))
+                if (Map* entranceMap = sMapMgr->CreateBaseMap(corpseMapEntry->CorpseMapID))
                 {
                     mapID = corpseMapEntry->CorpseMapID;
                     x = corpseMapEntry->Corpse.X;
@@ -374,7 +374,7 @@ void WorldSession::HandleQuestPOIQuery(WorldPackets::Query::QuestPOIQuery& quest
                     questPOIBlobData.Flags              = data->Flags;
                     questPOIBlobData.WorldEffectID      = data->WorldEffectID;
                     questPOIBlobData.PlayerConditionID  = data->PlayerConditionID;
-                    questPOIBlobData.UnkWoD1            = data->UnkWoD1;
+                    questPOIBlobData.SpawnTrackingID    = data->SpawnTrackingID;
                     questPOIBlobData.AlwaysAllowMergingBlobs = data->AlwaysAllowMergingBlobs;
 
                     for (QuestPOIPoint const& point : data->points)

@@ -39,6 +39,9 @@ enum RogueSpells
     SPELL_ROGUE_BLADE_FLURRY                        = 13877,
     SPELL_ROGUE_BLADE_FLURRY_EXTRA_ATTACK           = 22482,
     SPELL_ROGUE_CHEAT_DEATH_COOLDOWN                = 31231,
+    SPELL_ROGUE_CHEAP_SHOT                          = 1833,
+    SPELL_ROGUE_COLD_BLOOD                          = 213981,
+    SPELL_ROGUE_COLD_BLOOD_DAMAGE                   = 213983,
     SPELL_ROGUE_CRIPPLING_POISON                    = 3409,
     SPELL_ROGUE_GLYPH_OF_PREPARATION                = 56819,
     SPELL_ROGUE_KILLING_SPREE                       = 51690,
@@ -50,6 +53,7 @@ enum RogueSpells
     SPELL_ROGUE_SANCTUARY                           = 98877,
     SPELL_ROGUE_SHADOW_FOCUS                        = 108209,
     SPELL_ROGUE_SHADOW_FOCUS_EFFECT                 = 112942,
+    SPELL_ROGUE_SHADOWSTRIKE                        = 185438,
     SPELL_ROGUE_STEALTH                             = 1784,
     SPELL_ROGUE_STEALTH_STEALTH_AURA                = 158185,
     SPELL_ROGUE_STEALTH_SHAPESHIFT_AURA             = 158188,
@@ -189,6 +193,49 @@ class spell_rog_cheat_death : public SpellScriptLoader
         {
             return new spell_rog_cheat_death_AuraScript();
         }
+};
+
+// 213981 - Cold Blood
+/// Last update: 7.3.5 26972
+class spell_rog_cold_blood : public AuraScript
+{
+    PrepareAuraScript(spell_rog_cold_blood);
+
+    bool Validate(SpellInfo const*) override
+    {
+        return ValidateSpellInfo({ SPELL_ROGUE_COLD_BLOOD_DAMAGE });
+    }
+
+    bool CheckProc(ProcEventInfo& eventInfo)
+    {
+        if (eventInfo.GetSpellInfo()->Id == SPELL_ROGUE_CHEAP_SHOT || eventInfo.GetSpellInfo()->Id == SPELL_ROGUE_SHADOWSTRIKE)
+            return true;
+
+        return false;
+    }
+
+    void HandleProc(AuraEffect const* /*aurEff*/, ProcEventInfo& eventInfo)
+    {
+        if (Unit* caster = eventInfo.GetActor())
+        {
+            if (Unit* target = eventInfo.GetActionTarget())
+            {
+                int32 bp = GetSpellInfo()->GetEffect(EFFECT_0)->BasePoints;
+                int32 damage = target->CountPctFromMaxHealth(bp);
+
+                caster->CastCustomSpell(SPELL_ROGUE_COLD_BLOOD_DAMAGE, SPELLVALUE_BASE_POINT0, damage, target);
+
+                if (Aura* aura = caster->GetAura(SPELL_ROGUE_COLD_BLOOD))
+                    aura->Remove();
+            }
+        }
+    }
+
+    void Register() override
+    {
+        DoCheckProc += AuraCheckProcFn(spell_rog_cold_blood::CheckProc);
+        OnEffectProc += AuraEffectProcFn(spell_rog_cold_blood::HandleProc, EFFECT_0, SPELL_AURA_DUMMY);
+    }
 };
 
 // -51625 - Deadly Brew
@@ -699,7 +746,7 @@ class spell_rog_vanish : public SpellScriptLoader
 
                 Unit* target = GetHitUnit();
 
-                target->RemoveMovementImpairingAuras();
+                target->RemoveMovementImpairingAuras(true);
                 target->RemoveAurasByType(SPELL_AURA_MOD_STALKED);
                 if (target->GetTypeId() != TYPEID_PLAYER)
                     return;

@@ -25,6 +25,7 @@
 #include "GameObjectAI.h"
 #include "GameObjectModel.h"
 #include "GameObjectPackets.h"
+#include "GameTime.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "GroupMgr.h"
@@ -43,6 +44,7 @@
 #include "UpdateFieldFlags.h"
 #include "World.h"
 #include <G3D/Quat.h>
+#include <sstream>
 
 bool QuaternionData::isUnit() const
 {
@@ -81,6 +83,7 @@ GameObject::GameObject() : WorldObject(false), MapObject(),
     m_spawnId = UI64LIT(0);
 
     m_groupLootTimer = 0;
+    m_lootGenerationTime = 0;
 
     ResetLootMode(); // restore default loot mode
     m_stationaryPosition.Relocate(0.0f, 0.0f, 0.0f, 0.0f);
@@ -397,6 +400,18 @@ bool GameObject::Create(uint32 entry, Map* map, Position const& pos, QuaternionD
         }
     }
 
+    // Check if GameObject is Infinite
+    if (goInfo->IsInfiniteGameObject())
+        SetVisibilityDistanceOverride(VisibilityDistanceType::Infinite);
+
+    // Check if GameObject is Gigantic
+    if (goInfo->IsGiganticGameObject())
+        SetVisibilityDistanceOverride(VisibilityDistanceType::Gigantic);
+
+    // Check if GameObject is Large
+    if (goInfo->IsLargeGameObject())
+        SetVisibilityDistanceOverride(VisibilityDistanceType::Large);
+
     return true;
 }
 
@@ -448,10 +463,10 @@ void GameObject::Update(uint32 diff)
                     // Bombs
                     if (goInfo->trap.charges == 2)
                         // Hardcoded tooltip value
-                        m_cooldownTime = time(NULL) + 10;
+                        m_cooldownTime = GameTime::GetGameTimeMS() + 10 * IN_MILLISECONDS;
                     else if (Unit* owner = GetOwner())
                         if (owner->IsInCombat())
-                            m_cooldownTime = time(NULL) + goInfo->trap.startDelay;
+                            m_cooldownTime = GameTime::GetGameTimeMS() + goInfo->trap.startDelay * IN_MILLISECONDS;
 
                     SetLootState(GO_READY);
                     break;
@@ -598,6 +613,10 @@ void GameObject::Update(uint32 diff)
                         return;
                     }
 
+                    // Call AI Reset (required for example in SmartAI to clear one time events)
+                    if (AI())
+                        AI()->Reset();
+
                     // Respawn timer
                     uint32 poolid = GetSpawnId() ? sPoolMgr->IsPartOfAPool<GameObject>(GetSpawnId()) : 0;
                     if (poolid)
@@ -612,7 +631,7 @@ void GameObject::Update(uint32 diff)
                 GameObjectTemplate const* goInfo = GetGOInfo();
                 if (goInfo->type == GAMEOBJECT_TYPE_TRAP)
                 {
-                    if (m_cooldownTime >= time(NULL))
+                    if (GameTime::GetGameTimeMS() < m_cooldownTime)
                         break;
 
                     // Type 2 (bomb) does not need to be triggered by a unit and despawns after casting its spell.
@@ -679,11 +698,11 @@ void GameObject::Update(uint32 diff)
             {
                 case GAMEOBJECT_TYPE_DOOR:
                 case GAMEOBJECT_TYPE_BUTTON:
-                    if (m_cooldownTime && (m_cooldownTime < time(NULL)))
+                    if (m_cooldownTime && GameTime::GetGameTimeMS() >= m_cooldownTime)
                         ResetDoorOrButton();
                     break;
                 case GAMEOBJECT_TYPE_GOOBER:
-                    if (m_cooldownTime < time(NULL))
+                    if (GameTime::GetGameTimeMS() >= m_cooldownTime)
                     {
                         RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
 
@@ -697,7 +716,7 @@ void GameObject::Update(uint32 diff)
                         if (m_groupLootTimer <= diff)
                         {
                             if (Group* group = sGroupMgr->GetGroupByGUID(lootingGroupLowGUID))
-                                group->EndRoll(&loot);
+                                group->EndRoll(&loot, GetMap());
 
                             m_groupLootTimer = 0;
                             lootingGroupLowGUID.Clear();
@@ -722,7 +741,7 @@ void GameObject::Update(uint32 diff)
                             CastSpell(target, goInfo->trap.spell);
 
                         // Template value or 4 seconds
-                        m_cooldownTime = time(NULL) + (goInfo->trap.cooldown ? goInfo->trap.cooldown : uint32(4));
+                        m_cooldownTime = GameTime::GetGameTimeMS() + (goInfo->trap.cooldown ? goInfo->trap.cooldown : uint32(4)) * IN_MILLISECONDS;
 
                         if (goInfo->trap.charges == 1)
                             SetLootState(GO_JUST_DEACTIVATED);
@@ -800,7 +819,7 @@ void GameObject::Update(uint32 diff)
             if (!m_spawnedByDefault)
             {
                 m_respawnTime = 0;
-                UpdateObjectVisibility();
+                DestroyForNearbyPlayers(); // old UpdateObjectVisibility()
                 return;
             }
 
@@ -810,7 +829,7 @@ void GameObject::Update(uint32 diff)
             if (sWorld->getBoolConfig(CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY))
                 SaveRespawnTime();
 
-            UpdateObjectVisibility();
+            DestroyForNearbyPlayers(); // old UpdateObjectVisibility()
 
             break;
         }
@@ -940,16 +959,17 @@ void GameObject::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiff
     data.go_state = GetGoState();
     data.spawnDifficulties = spawnDifficulties;
     data.artKit = GetGoArtKit();
+    data.isActive = isActiveObject();
 
     data.phaseId = GetDBPhase() > 0 ? GetDBPhase() : data.phaseId;
     data.phaseGroup = GetDBPhase() < 0 ? -GetDBPhase() : data.phaseGroup;
 
     // Update in DB
-    SQLTransaction trans = WorldDatabase.BeginTransaction();
+    WorldDatabaseTransaction trans = WorldDatabase.BeginTransaction();
 
     uint8 index = 0;
 
-    PreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_DEL_GAMEOBJECT);
+    WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_DEL_GAMEOBJECT);
     stmt->setUInt64(0, m_spawnId);
     trans->Append(stmt);
 
@@ -957,7 +977,20 @@ void GameObject::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiff
     stmt->setUInt64(index++, m_spawnId);
     stmt->setUInt32(index++, GetEntry());
     stmt->setUInt16(index++, uint16(mapid));
-    stmt->setString(index++, StringJoin(data.spawnDifficulties, ","));
+    stmt->setString(index++, [&data]() -> std::string
+    {
+        if (data.spawnDifficulties.empty())
+            return "";
+
+        std::ostringstream os;
+        auto itr = data.spawnDifficulties.begin();
+        os << int32(*itr++);
+
+        for (; itr != data.spawnDifficulties.end(); ++itr)
+            os << ',' << int32(*itr);
+
+        return os.str();
+    }());
     stmt->setUInt32(index++, data.phaseId);
     stmt->setUInt32(index++, data.phaseGroup);
     stmt->setFloat(index++, GetPositionX());
@@ -971,6 +1004,7 @@ void GameObject::SaveToDB(uint32 mapid, std::vector<Difficulty> const& spawnDiff
     stmt->setInt32(index++, int32(m_respawnDelayTime));
     stmt->setUInt8(index++, GetGoAnimProgress());
     stmt->setUInt8(index++, uint8(GetGoState()));
+    stmt->setUInt32(index++, uint8(isActiveObject()));
     trans->Append(stmt);
 
     WorldDatabase.CommitTransaction(trans);
@@ -1032,6 +1066,8 @@ bool GameObject::LoadGameObjectFromDB(ObjectGuid::LowType spawnId, Map* map, boo
 
     m_goData = data;
 
+    setActive(data->isActive || GetGoType() == GAMEOBJECT_TYPE_PHASEABLE_MO);
+
     if (addToMap && !GetMap()->AddToMap(this))
         return false;
 
@@ -1043,7 +1079,7 @@ void GameObject::DeleteFromDB()
     GetMap()->RemoveGORespawnTime(m_spawnId);
     sObjectMgr->DeleteGOData(m_spawnId);
 
-    PreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_DEL_GAMEOBJECT);
+    WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_DEL_GAMEOBJECT);
 
     stmt->setUInt64(0, m_spawnId);
 
@@ -1285,7 +1321,7 @@ void GameObject::UseDoorOrButton(uint32 time_to_restore, bool alternative /* = f
     SwitchDoorOrButton(true, alternative);
     SetLootState(GO_ACTIVATED, user);
 
-    m_cooldownTime = time_to_restore ? (time(NULL) + time_to_restore) : 0;
+    m_cooldownTime = time_to_restore ? (GameTime::GetGameTimeMS() + time_to_restore) : 0;
 }
 
 void GameObject::SetGoArtKit(uint8 kit)
@@ -1336,17 +1372,17 @@ void GameObject::Use(Unit* user)
         if (sScriptMgr->OnGossipHello(playerUser, this))
             return;
 
-        if (AI()->GossipHello(playerUser, true))
+        if (AI()->GossipHello(playerUser, false))
             return;
     }
 
     // If cooldown data present in template
     if (uint32 cooldown = GetGOInfo()->GetCooldown())
     {
-        if (m_cooldownTime > sWorld->GetGameTime())
+        if (m_cooldownTime > GameTime::GetGameTime())
             return;
 
-        m_cooldownTime = sWorld->GetGameTime() + cooldown;
+        m_cooldownTime = GameTime::GetGameTimeMS() + cooldown * IN_MILLISECONDS;
     }
 
     switch (GetGoType())
@@ -1373,7 +1409,7 @@ void GameObject::Use(Unit* user)
             if (goInfo->trap.spell)
                 CastSpell(user, goInfo->trap.spell);
 
-            m_cooldownTime = time(NULL) + (goInfo->trap.cooldown ? goInfo->trap.cooldown :  uint32(4));   // template or 4 seconds
+            m_cooldownTime = GameTime::GetGameTimeMS() + (goInfo->trap.cooldown ? goInfo->trap.cooldown :  uint32(4)) * IN_MILLISECONDS;   // template or 4 seconds
 
             if (goInfo->trap.charges == 1)         // Deactivate after trigger
                 SetLootState(GO_JUST_DEACTIVATED);
@@ -1424,7 +1460,7 @@ void GameObject::Use(Unit* user)
 
                 if (!itr->second.IsEmpty())
                 {
-                    if (Player* ChairUser = ObjectAccessor::FindPlayer(itr->second))
+                    if (Player* ChairUser = ObjectAccessor::GetPlayer(*this, itr->second))
                     {
                         if (ChairUser->IsSitState() && ChairUser->GetStandState() != UNIT_STAND_STATE_SIT && ChairUser->GetExactDist2d(x_i, y_i) < 0.1f)
                             continue;        // This seat is already occupied by ChairUser. NOTE: Not sure if the ChairUser->GetStandState() != UNIT_STAND_STATE_SIT check is required.
@@ -1520,7 +1556,7 @@ void GameObject::Use(Unit* user)
             else
                 SetGoState(GO_STATE_ACTIVE);
 
-            m_cooldownTime = time(NULL) + info->GetAutoCloseTime();
+            m_cooldownTime = GameTime::GetGameTimeMS() + info->GetAutoCloseTime();
 
             // cast this spell later if provided
             spellId = info->goober.spell;

@@ -428,31 +428,8 @@ enum UnitState
     UNIT_STATE_ALL_STATE       = 0xffffffff                      //(UNIT_STATE_STOPPED | UNIT_STATE_MOVING | UNIT_STATE_IN_COMBAT | UNIT_STATE_IN_FLIGHT)
 };
 
-enum UnitMoveType
-{
-    MOVE_WALK           = 0,
-    MOVE_RUN            = 1,
-    MOVE_RUN_BACK       = 2,
-    MOVE_SWIM           = 3,
-    MOVE_SWIM_BACK      = 4,
-    MOVE_TURN_RATE      = 5,
-    MOVE_FLIGHT         = 6,
-    MOVE_FLIGHT_BACK    = 7,
-    MOVE_PITCH_RATE     = 8
-};
-
-#define MAX_MOVE_TYPE     9
-
 TC_GAME_API extern float baseMoveSpeed[MAX_MOVE_TYPE];
 TC_GAME_API extern float playerBaseMoveSpeed[MAX_MOVE_TYPE];
-
-enum WeaponAttackType : uint8
-{
-    BASE_ATTACK   = 0,
-    OFF_ATTACK    = 1,
-    RANGED_ATTACK = 2,
-    MAX_ATTACK
-};
 
 enum CombatRating
 {
@@ -921,6 +898,7 @@ class TC_GAME_API Unit : public WorldObject
     public:
         typedef std::set<Unit*> AttackerSet;
         typedef std::set<Unit*> ControlList;
+        typedef std::vector<Unit*> UnitVector;
 
         typedef std::multimap<uint32, Aura*> AuraMap;
         typedef std::pair<AuraMap::const_iterator, AuraMap::const_iterator> AuraMapBounds;
@@ -1001,6 +979,7 @@ class TC_GAME_API Unit : public WorldObject
             return m_attacking;
         }
 
+        void ValidateAttackersAndOwnTarget();
         void CombatStop(bool includingCast = false);
         void CombatStopWithPets(bool includingCast = false);
         void StopAttackFaction(uint32 faction_id);
@@ -1030,6 +1009,9 @@ class TC_GAME_API Unit : public WorldObject
         uint8 getClass() const { return GetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS); }
         uint32 getClassMask() const { return 1 << (getClass()-1); }
         uint8 getGender() const { return GetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER); }
+        void SetGender(uint8 gender) { SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, gender); }
+        virtual uint8 GetNativeGender() const { return getGender(); }
+        virtual void SetNativeGender(uint8 gender) { SetGender(gender); }
 
         float GetStat(Stats stat) const { return float(GetUInt32Value(UNIT_FIELD_STAT+stat)); }
         void SetStat(Stats stat, int32 val) { SetStatInt32Value(UNIT_FIELD_STAT+stat, val); }
@@ -1039,6 +1021,7 @@ class TC_GAME_API Unit : public WorldObject
         uint32 GetResistance(SpellSchools school) const { return GetUInt32Value(UNIT_FIELD_RESISTANCES+school); }
         uint32 GetResistance(SpellSchoolMask mask) const;
         void SetResistance(SpellSchools school, int32 val) { SetStatInt32Value(UNIT_FIELD_RESISTANCES+school, val); }
+        float GetEffectiveResistChance(Unit const* owner, SpellSchoolMask schoolMask, Unit const* victim, SpellInfo const* spellInfo = nullptr);
 
         uint64 GetHealth()    const { return GetUInt64Value(UNIT_FIELD_HEALTH); }
         uint64 GetMaxHealth() const { return GetUInt64Value(UNIT_FIELD_MAXHEALTH); }
@@ -1103,6 +1086,7 @@ class TC_GAME_API Unit : public WorldObject
         bool IsContestedGuard() const;
         bool IsPvP() const { return HasByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_PVP); }
         bool IsFFAPvP() const { return HasByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_FFA_PVP); }
+        bool IsInSanctuary() const { return HasByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_SANCTUARY); }
         virtual void SetPvP(bool state);
 
         uint32 GetCreatureType() const;
@@ -1207,11 +1191,13 @@ class TC_GAME_API Unit : public WorldObject
         bool IsInFlight()  const { return HasUnitState(UNIT_STATE_IN_FLIGHT); }
 
         bool IsInCombat()  const { return HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IN_COMBAT); }
+        bool IsPetInCombat() const { return HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PET_IN_COMBAT); }
         bool IsInCombatWith(Unit const* who) const;
         void CombatStart(Unit* target, bool initialAggro = true);
         void SetInCombatState(bool PvP, Unit* enemy = NULL);
         void SetInCombatWith(Unit* enemy);
         void ClearInCombat();
+        void ClearInPetCombat();
         uint32 GetCombatTimer() const { return m_CombatTimer; }
 
         bool HasAuraTypeWithFamilyFlags(AuraType auraType, uint32 familyName, uint32 familyFlags) const;
@@ -1347,6 +1333,8 @@ class TC_GAME_API Unit : public WorldObject
         ObjectGuid GetPetGUID() const { return m_SummonSlot[SUMMON_SLOT_PET]; }
         void SetCritterGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_CRITTER, guid); }
         ObjectGuid GetCritterGUID() const { return GetGuidValue(UNIT_FIELD_CRITTER); }
+        void SetDemonCreatorGUID(ObjectGuid guid) { SetGuidValue(UNIT_FIELD_DEMON_CREATOR, guid); }
+        ObjectGuid GetDemonCreatorGUID() const { return GetGuidValue(UNIT_FIELD_DEMON_CREATOR); }		
 
         bool IsControlledByPlayer() const { return m_ControlledByPlayer; }
         ObjectGuid GetCharmerOrOwnerGUID() const;
@@ -1459,7 +1447,8 @@ class TC_GAME_API Unit : public WorldObject
         void RemoveAurasWithAttribute(uint32 flags);
         void RemoveAurasWithFamily(SpellFamilyNames family, flag128 const& familyFlag, ObjectGuid casterGUID);
         void RemoveAurasWithMechanic(uint32 mechanic_mask, AuraRemoveMode removemode = AURA_REMOVE_BY_DEFAULT, uint32 except = 0);
-        void RemoveMovementImpairingAuras();
+        void RemoveMovementImpairingAuras(bool withRoot);
+        void RemoveAurasByShapeShift();
 
         void RemoveAreaAurasDueToLeaveWorld();
         void RemoveAllAuras();
@@ -1745,6 +1734,7 @@ class TC_GAME_API Unit : public WorldObject
         void ApplySpellImmune(uint32 spellId, uint32 op, uint32 type, bool apply);
         virtual bool IsImmunedToSpell(SpellInfo const* spellInfo, Unit* caster) const; // redefined in Creature
         uint32 GetSchoolImmunityMask() const;
+        uint32 GetDamageImmunityMask() const;
         uint32 GetMechanicImmunityMask() const;
 
         bool IsImmunedToDamage(SpellSchoolMask meleeSchoolMask) const;
@@ -1752,8 +1742,8 @@ class TC_GAME_API Unit : public WorldObject
         virtual bool IsImmunedToSpellEffect(SpellInfo const* spellInfo, uint32 index, Unit* caster) const; // redefined in Creature
 
         bool IsDamageReducedByArmor(SpellSchoolMask damageSchoolMask, SpellInfo const* spellInfo = nullptr, int8 effIndex = -1);
-        uint32 CalcArmorReducedDamage(Unit* attacker, Unit* victim, const uint32 damage, SpellInfo const* spellInfo, WeaponAttackType attackType = MAX_ATTACK);
-        uint32 CalcSpellResistance(Unit* victim, SpellSchoolMask schoolMask, SpellInfo const* spellInfo) const;
+        uint32 CalcArmorReducedDamage(Unit* attacker, Unit* victim, const uint32 damage, SpellInfo const* spellInfo, WeaponAttackType attackType = MAX_ATTACK) const;
+        uint32 CalcSpellResistedDamage(Unit* attacker, Unit* victim, uint32 damage, SpellSchoolMask schoolMask, SpellInfo const* spellInfo);
         void CalcAbsorbResist(DamageInfo& damageInfo);
         void CalcHealAbsorb(HealInfo& healInfo) const;
 
@@ -1822,7 +1812,7 @@ class TC_GAME_API Unit : public WorldObject
         void AddPetAura(PetAura const* petSpell);
         void RemovePetAura(PetAura const* petSpell);
 
-        uint32 GetModelForForm(ShapeshiftForm form) const;
+        uint32 GetModelForForm(ShapeshiftForm form, uint32 spellId) const;
 
         // Redirect Threat
         void SetRedirectThreat(ObjectGuid guid, uint32 pct) { _redirectThreadInfo.Set(guid, pct); }
@@ -1886,11 +1876,6 @@ class TC_GAME_API Unit : public WorldObject
 
         // Movement info
         Movement::MoveSpline * movespline;
-
-        // Part of Evade mechanics
-        time_t GetLastDamagedTime() const { return _lastDamagedTime; }
-        void UpdateLastDamagedTime(SpellInfo const* spellProto);
-        void SetLastDamagedTime(time_t val) { _lastDamagedTime = val; }
 
         int32 GetHighestExclusiveSameEffectSpellGroupValue(AuraEffect const* aurEff, AuraType auraType, bool checkMiscValue = false, int32 miscValue = 0) const;
         bool IsHighestExclusiveAura(Aura const* aura, bool removeOtherAuraApplications = false);
@@ -2033,8 +2018,6 @@ class TC_GAME_API Unit : public WorldObject
         uint16 _aiAnimKitId;
         uint16 _movementAnimKitId;
         uint16 _meleeAnimKitId;
-
-        time_t _lastDamagedTime; // Part of Evade mechanics
 
         SpellHistory* _spellHistory;
 };

@@ -24,6 +24,7 @@
 #include "Define.h"
 #include "Duration.h"
 #include "IteratorPair.h"
+#include "RaceMask.h"
 #include "SharedDefines.h"
 #include "Util.h"
 
@@ -36,6 +37,7 @@ class SpellInfo;
 class Player;
 class Unit;
 class ProcEventInfo;
+struct BattlePetSpeciesEntry;
 struct SkillLineAbilityEntry;
 struct SpellEntry;
 struct SpellAuraOptionsEntry;
@@ -257,7 +259,10 @@ enum ProcAttributes
     PROC_ATTR_REQ_EXP_OR_HONOR   = 0x0000001, // requires proc target to give exp or honor for aura proc
     PROC_ATTR_TRIGGERED_CAN_PROC = 0x0000002, // aura can proc even with triggered spells
     PROC_ATTR_REQ_POWER_COST     = 0x0000004, // requires triggering spell to have a power cost for aura proc
-    PROC_ATTR_REQ_SPELLMOD       = 0x0000008  // requires triggering spell to be affected by proccing aura to drop charges
+    PROC_ATTR_REQ_SPELLMOD       = 0x0000008, // requires triggering spell to be affected by proccing aura to drop charges
+
+
+    PROC_ATTR_REDUCE_PROC_60     = 0x0000080  // aura should have a reduced chance to proc if level of proc Actor > 60
 };
 
 struct SpellProcEntry
@@ -270,6 +275,7 @@ struct SpellProcEntry
     uint32 SpellPhaseMask;   // if nonzero - bitmask for matching phase of a spellcast on which proc occurs, see enum ProcFlagsSpellPhase
     uint32 HitMask;          // if nonzero - bitmask for matching proc condition based on hit result, see enum ProcFlagsHit
     uint32 AttributesMask;   // bitmask, see ProcAttributes
+    uint32 DisableEffectsMask;// bitmask
     float ProcsPerMinute;    // if nonzero - chance to proc is equal to value * aura caster's weapon speed / 60
     float Chance;            // if nonzero - owerwrite procChance field for given Spell.dbc entry, defines chance of proc to occur, not used if ProcsPerMinute set
     Milliseconds Cooldown;   // if nonzero - cooldown in secs for aura proc, applied to aura
@@ -278,11 +284,18 @@ struct SpellProcEntry
 
 typedef std::unordered_map<uint32, SpellProcEntry> SpellProcMap;
 
+enum EnchantProcAttributes
+{
+    ENCHANT_PROC_ATTR_WHITE_HIT  = 0x0000001, // enchant shall only proc off white hits (not abilities)
+    ENCHANT_PROC_ATTR_LIMIT_60   = 0x0000002  // enchant effects shall be reduced past lvl 60
+};
+
 struct SpellEnchantProcEntry
 {
-    uint32      customChance;
-    float       PPMChance;
-    uint32      procEx;
+    float       Chance;         // if nonzero - overwrite SpellItemEnchantment value
+    float       ProcsPerMinute; // if nonzero - chance to proc is equal to value * aura caster's weapon speed / 60
+    uint32      HitMask;        // if nonzero - bitmask for matching proc condition based on hit result, see enum ProcFlagsHit
+    uint32      AttributesMask; // bitmask, see EnchantProcAttributes
 };
 
 typedef std::unordered_map<uint32, SpellEnchantProcEntry> SpellEnchantProcEventMap;
@@ -464,7 +477,7 @@ struct TC_GAME_API SpellArea
     uint32 questStart;                                      // quest start (quest must be active or rewarded for spell apply)
     uint32 questEnd;                                        // quest end (quest must not be rewarded for spell apply)
     int32  auraSpell;                                       // spell aura must be applied for spell apply)if possitive) and it must not be applied in other case
-    uint32 raceMask;                                        // can be applied only to races
+    Trinity::RaceMask<uint64> raceMask;                     // can be applied only to races
     Gender gender;                                          // can be applied only to gender
     uint32 questStartStatus;                                // QuestStatus that quest_start must have in order to keep the spell
     uint32 questEndStatus;                                  // QuestStatus that the quest_end must have in order to keep the spell (if the quest_end's status is different than this, the spell will be dropped)
@@ -690,6 +703,8 @@ class TC_GAME_API SpellMgr
 
         uint32 GetModelForTotem(uint32 spellId, uint8 race) const;
 
+        BattlePetSpeciesEntry const* GetBattlePetSpecies(uint32 spellId) const;
+
     private:
         SpellInfo* _GetSpellInfo(uint32 spellId) { return spellId < GetSpellInfoStoreSize() ?  mSpellInfoMap[spellId] : NULL; }
 
@@ -753,6 +768,7 @@ class TC_GAME_API SpellMgr
         PetDefaultSpellsMap        mPetDefaultSpellsMap;           // only spells not listed in related mPetLevelupSpellMap entry
         SpellInfoMap               mSpellInfoMap;
         SpellTotemModelMap         mSpellTotemModel;
+        std::unordered_map<uint32, BattlePetSpeciesEntry const*> mBattlePets;
 };
 
 #define sSpellMgr SpellMgr::instance()

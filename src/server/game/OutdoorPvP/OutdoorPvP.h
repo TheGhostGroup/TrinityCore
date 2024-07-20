@@ -26,14 +26,25 @@ class GameObject;
 
 enum OutdoorPvPTypes
 {
-    OUTDOOR_PVP_HP = 1,
-    OUTDOOR_PVP_NA = 2,
-    OUTDOOR_PVP_TF = 3,
-    OUTDOOR_PVP_ZM = 4,
-    OUTDOOR_PVP_SI = 5
+    OUTDOOR_PVP_HP                  = 1,
+    OUTDOOR_PVP_NA                  = 2,
+    OUTDOOR_PVP_TF                  = 3,
+    OUTDOOR_PVP_ZM                  = 4,
+    OUTDOOR_PVP_SI                  = 5,
+    OUTDOOR_PVP_ASHRAN              = 6,
+    OUTDOOR_PVP_TARRENMILL          = 7,
+    OUTDOOR_PVP_RG                  = 8,
+    OUTDOOR_PVP_SENTINAX            = 9,
+    OUTDOOR_PVP_ARGUS_INVASION      = 10,
+    OUTDOOR_PVP_PARAXIS             = 11,
+    OUTDOOR_PVP_DALARAN_EVENT       = 12,
+    OUTDOOR_PVP_THOUSAND_NEEDLES    = 13,
+    OUTDOOR_PVP_AB_WINTER_EVENT     = 14,
+    OUTDOOR_PVP_AB_WNTR_EVENT_EV    = 15,
+    OUTDOOR_PVP_DALARAN_UNDERBELLY  = 16,
 };
 
-#define MAX_OUTDOORPVP_TYPES 6
+#define MAX_OUTDOORPVP_TYPES 16
 
 enum ObjectiveStates
 {

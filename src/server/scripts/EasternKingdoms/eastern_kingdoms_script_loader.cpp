@@ -69,7 +69,7 @@ void AddSC_boss_nefarian();
 void AddSC_instance_blackwing_lair();
 void AddSC_deadmines();                      //Deadmines
 void AddSC_instance_deadmines();
-void AddSC_boss_mr_smite();
+void AddSC_boss_glubtok();
 void AddSC_gnomeregan();                     //Gnomeregan
 void AddSC_instance_gnomeregan();
 void AddSC_boss_attumen();                   //Karazhan
@@ -132,6 +132,7 @@ void AddSC_boss_kirtonos_the_herald();
 void AddSC_instance_scholomance();
 void AddSC_shadowfang_keep();                //Shadowfang keep
 void AddSC_instance_shadowfang_keep();
+void AddSC_boss_apothecary_hummel();
 void AddSC_boss_magistrate_barthilas();      //Stratholme
 void AddSC_boss_maleki_the_pallid();
 void AddSC_boss_nerubenkan();
@@ -185,6 +186,7 @@ void AddSC_instance_zulgurub();
 void AddSC_arathi_highlands();
 void AddSC_blasted_lands();
 void AddSC_burning_steppes();
+void AddSC_dalaran_deadwind();
 void AddSC_dun_morogh();
 void AddSC_dun_morogh_area_coldridge_valley();
 void AddSC_duskwood();
@@ -259,8 +261,8 @@ void AddEasternKingdomsScripts()
     AddSC_boss_nefarian();
     AddSC_instance_blackwing_lair();
     AddSC_deadmines();                      //Deadmines
-    AddSC_boss_mr_smite();
     AddSC_instance_deadmines();
+    AddSC_boss_glubtok();
     AddSC_gnomeregan();                     //Gnomeregan
     AddSC_instance_gnomeregan();
     AddSC_boss_attumen();                   //Karazhan
@@ -323,6 +325,7 @@ void AddEasternKingdomsScripts()
     AddSC_instance_scholomance();
     AddSC_shadowfang_keep();                //Shadowfang keep
     AddSC_instance_shadowfang_keep();
+    AddSC_boss_apothecary_hummel();
     AddSC_boss_magistrate_barthilas();      //Stratholme
     AddSC_boss_maleki_the_pallid();
     AddSC_boss_nerubenkan();
@@ -377,6 +380,7 @@ void AddEasternKingdomsScripts()
     AddSC_arathi_highlands();
     AddSC_blasted_lands();
     AddSC_burning_steppes();
+	AddSC_dalaran_deadwind();
     AddSC_dun_morogh();
     AddSC_dun_morogh_area_coldridge_valley();
     AddSC_duskwood();

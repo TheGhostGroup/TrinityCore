@@ -36,6 +36,11 @@
 #include <unordered_map>
 #include <cstdlib>
 #include <cstring>
+#if TRINITY_PLATFORM == TRINITY_PLATFORM_WINDOWS
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 CASC::StorageHandle CascStorage;
 
@@ -66,6 +71,7 @@ std::unordered_map<uint32, LiquidMaterialEntry> LiquidMaterials;
 std::unordered_map<uint32, LiquidObjectEntry> LiquidObjects;
 std::unordered_map<uint32, LiquidTypeEntry> LiquidTypes;
 std::set<std::string> CameraFileNames;
+bool PrintProgress = true;
 boost::filesystem::path input_path;
 boost::filesystem::path output_path;
 
@@ -1107,7 +1113,8 @@ void ExtractMaps(uint32 build)
             }
 
             // draw progress bar
-            printf("Processing........................%d%%\r", (100 * (y+1)) / WDT_MAP_SIZE);
+            if (PrintProgress)
+                printf("Processing........................%d%%\r", (100 * (y + 1)) / WDT_MAP_SIZE);
         }
     }
 
@@ -1374,6 +1381,7 @@ int main(int argc, char * arg[])
 {
     Trinity::Banner::Show("Map & DBC Extractor", [](char const* text) { printf("%s\n", text); }, nullptr);
 
+    PrintProgress = isatty(fileno(stdout));
     input_path = boost::filesystem::current_path();
     output_path = boost::filesystem::current_path();
 

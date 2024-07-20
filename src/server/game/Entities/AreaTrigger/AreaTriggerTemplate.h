@@ -36,9 +36,9 @@ enum AreaTriggerFlags
     AREATRIGGER_FLAG_HAS_FOLLOWS_TERRAIN        = 0x00010, // NYI
     AREATRIGGER_FLAG_UNK1                       = 0x00020,
     AREATRIGGER_FLAG_HAS_TARGET_ROLL_PITCH_YAW  = 0x00040, // NYI
-    AREATRIGGER_FLAG_UNK2                       = 0x00080,
+    AREATRIGGER_FLAG_HAS_ANIM_ID                = 0x00080,
     AREATRIGGER_FLAG_UNK3                       = 0x00100,
-    AREATRIGGER_FLAG_UNK4                       = 0x00200,
+    AREATRIGGER_FLAG_HAS_ANIM_KIT_ID            = 0x00200,
     AREATRIGGER_FLAG_HAS_CIRCULAR_MOVEMENT      = 0x00400
 };
 
@@ -77,21 +77,34 @@ struct AreaTriggerAction
     AreaTriggerActionUserTypes TargetType;
 };
 
+// Scale array definition
+// 0 - time offset from creation for starting of scaling
+// 1+2,3+4 are values for curve points Vector2[2]
+// 5 is packed curve information (has_no_data & 1) | ((interpolation_mode & 0x7) << 1) | ((first_point_offset & 0x7FFFFF) << 4) | ((point_count & 0x1F) << 27)
+// 6 bool is_override, only valid for AREATRIGGER_OVERRIDE_SCALE_CURVE, if true then use data from AREATRIGGER_OVERRIDE_SCALE_CURVE instead of ScaleCurveId from CreateObject
+
 struct AreaTriggerScaleInfo
 {
     AreaTriggerScaleInfo();
 
     union
     {
-        int32 AsInt32;
-        float AsFloat;
-    } OverrideScale[MAX_AREATRIGGER_SCALE];
+        struct
+        {
+            uint32 StartTimeOffset;
+            float Points[4];
+            struct
+            {
+                uint32 NoData : 1;
+                uint32 InterpolationMode : 3;
+                uint32 FirstPointOffset : 23;
+                uint32 PointCount : 5;
+            } CurveParameters;
+            uint32 OverrideActive;
+        } Structured;
 
-    union
-    {
-        int32 AsInt32;
-        float AsFloat;
-    } ExtraScale[MAX_AREATRIGGER_SCALE];
+        uint32 Raw[MAX_AREATRIGGER_SCALE];
+    } Data;
 };
 
 struct AreaTriggerCircularMovementInfo
@@ -190,12 +203,16 @@ public:
     uint32 MorphCurveId;
     uint32 FacingCurveId;
 
+    int32 AnimId;
+    int32 AnimKitId;
+
     uint32 DecalPropertiesId;
 
     uint32 TimeToTarget;
     uint32 TimeToTargetScale;
 
-    AreaTriggerScaleInfo ScaleInfo;
+    AreaTriggerScaleInfo OverrideScale;
+    AreaTriggerScaleInfo ExtraScale;
     AreaTriggerCircularMovementInfo CircularMovementInfo;
 
     AreaTriggerTemplate const* Template;

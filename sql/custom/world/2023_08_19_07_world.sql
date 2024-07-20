@@ -1,0 +1,4 @@
+-- fix more condition warnings
+
+DELETE FROM `conditions` WHERE `SourceTypeOrReferenceId`=13 AND `ConditionValue2` IN (60916, 55558, 56377, 55694, 55585, 57668, 65558, 64507, 55786, 55744, 55595, 55592, 55586, 55672,
+57874, 55918, 56662, 56661, 57769, 56676);

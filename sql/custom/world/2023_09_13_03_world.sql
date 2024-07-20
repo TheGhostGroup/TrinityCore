@@ -1,0 +1,26 @@
+-- garrison instance template
+DELETE FROM `instance_template` WHERE `map` IN (1152, 1330, 1154, 1158, 1331, 1160, 1187, 1188, 1189, 1232, 1233, 1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245);
+INSERT INTO `instance_template` (`map`, `parent`, `script`) VALUES
+(1152, 1116, 'instance_ffr_horde_garrison_level_1'),
+(1330, 1116, 'instance_ffr_horde_garrison_level_2'),
+(1154, 1116, 'instance_ffr_horde_garrison_level_3'),
+(1232, 1116, 'instance_gor_horde_garrison_level_0'),
+(1233, 1116, 'instance_gor_horde_garrison_level_3'),
+(1236, 1116, 'instance_tal_horde_garrison_level_0'),
+(1237, 1116, 'instance_tal_horde_garrison_level_3'),
+(1240, 1116, 'instance_soa_horde_garrison_0'),
+(1241, 1116, 'instance_soa_horde_garrison_3'),
+(1244, 1116, 'instance_nag_horde_garrison_level_0'),
+(1245, 1116, 'instance_nag_horde_garrison_level_3'),
+(1158, 1116, 'instance_smv_alliance_garrison_level_1'),
+(1331, 1116, 'instance_smv_alliance_garrison_level_2'),
+(1160, 1116, 'instance_smv_alliance_garrison_level_3'),
+(1187, 1116, 'instance_gor_alliance_garrison_level_1'),
+(1188, 1116, 'instance_gor_alliance_garrison_level_2'),
+(1189, 1116, 'instance_gor_alliance_garrison_level_3'),
+(1234, 1116, 'instance_tal_alliance_garrison_level_0'),
+(1235, 1116, 'instance_tal_alliance_garrison_level_3'),
+(1238, 1116, 'instance_soa_alliance_garrison_0'),
+(1239, 1116, 'instance_soa_alliance_garrison_3'),
+(1242, 1116, 'instance_nag_alliance_garrison_level_0'),
+(1243, 1116, 'instance_nag_alliance_garrison_level_3');

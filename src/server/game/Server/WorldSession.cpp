@@ -126,7 +126,7 @@ WorldSession::WorldSession(uint32 id, std::string&& name, uint32 battlenetAccoun
     m_sessionDbLocaleIndex(locale),
     m_latency(0),
     m_clientTimeDelay(0),
-    _tutorialsChanged(false),
+    _tutorialsChanged(TUTORIALS_FLAG_NONE),
     _filterAddonMessages(false),
     recruiterId(recruiter),
     isRecruiter(isARecruiter),
@@ -234,7 +234,7 @@ void WorldSession::SendPacket(WorldPacket const* packet, bool forced /*= false*/
     {
         if (packet->GetConnection() != CONNECTION_TYPE_INSTANCE && IsInstanceOnlyOpcode(packet->GetOpcode()))
         {
-            TC_LOG_ERROR("network.opcode", "Prevented sending of instance only opcode %u with connection type %u to %s", packet->GetOpcode(), packet->GetConnection(), GetPlayerInfo().c_str());
+            TC_LOG_ERROR("network.opcode", "Prevented sending of instance only opcode %u with connection type %u to %s", packet->GetOpcode(), uint32(packet->GetConnection()), GetPlayerInfo().c_str());
             return;
         }
 
@@ -243,7 +243,7 @@ void WorldSession::SendPacket(WorldPacket const* packet, bool forced /*= false*/
 
     if (!m_Socket[conIdx])
     {
-        TC_LOG_ERROR("network.opcode", "Prevented sending of %s to non existent socket %u to %s", GetOpcodeNameForLogging(static_cast<OpcodeServer>(packet->GetOpcode())).c_str(), conIdx, GetPlayerInfo().c_str());
+        TC_LOG_ERROR("network.opcode", "Prevented sending of %s to non existent socket %u to %s", GetOpcodeNameForLogging(static_cast<OpcodeServer>(packet->GetOpcode())).c_str(), uint32(conIdx), GetPlayerInfo().c_str());
         return;
     }
 
@@ -625,7 +625,7 @@ void WorldSession::LogoutPlayer(bool save)
         TC_LOG_DEBUG("network", "SESSION: Sent SMSG_LOGOUT_COMPLETE Message");
 
         //! Since each account can only have one online character at any given time, ensure all characters for active account are marked as offline
-        PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_ACCOUNT_ONLINE);
+        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_ACCOUNT_ONLINE);
         stmt->setUInt32(0, GetAccountId());
         CharacterDatabase.Execute(stmt);
     }
@@ -772,7 +772,7 @@ void WorldSession::SetAccountData(AccountDataType type, uint32 time, std::string
 {
     if ((1 << type) & GLOBAL_CACHE_MASK)
     {
-        PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_ACCOUNT_DATA);
+        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_ACCOUNT_DATA);
         stmt->setUInt32(0, GetAccountId());
         stmt->setUInt8(1, type);
         stmt->setUInt32(2, time);
@@ -785,7 +785,7 @@ void WorldSession::SetAccountData(AccountDataType type, uint32 time, std::string
         if (!m_GUIDLow)
             return;
 
-        PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_PLAYER_ACCOUNT_DATA);
+        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_REP_PLAYER_ACCOUNT_DATA);
         stmt->setUInt64(0, m_GUIDLow);
         stmt->setUInt8(1, type);
         stmt->setUInt32(2, time);
@@ -802,10 +802,13 @@ void WorldSession::LoadTutorialsData(PreparedQueryResult result)
     memset(_tutorials, 0, sizeof(uint32) * MAX_ACCOUNT_TUTORIAL_VALUES);
 
     if (result)
+    {
         for (uint8 i = 0; i < MAX_ACCOUNT_TUTORIAL_VALUES; ++i)
             _tutorials[i] = (*result)[i].GetUInt32();
+        _tutorialsChanged |= TUTORIALS_FLAG_LOADED_FROM_DB;
+    }
 
-    _tutorialsChanged = false;
+    _tutorialsChanged &= ~TUTORIALS_FLAG_CHANGED;
 }
 
 void WorldSession::SendTutorialsData()
@@ -815,22 +818,23 @@ void WorldSession::SendTutorialsData()
     SendPacket(packet.Write());
 }
 
-void WorldSession::SaveTutorialsData(SQLTransaction& trans)
+void WorldSession::SaveTutorialsData(CharacterDatabaseTransaction& trans)
 {
-    if (!_tutorialsChanged)
+    if (!(_tutorialsChanged & TUTORIALS_FLAG_CHANGED))
         return;
 
-    PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_HAS_TUTORIALS);
-    stmt->setUInt32(0, GetAccountId());
-    bool hasTutorials = bool(CharacterDatabase.Query(stmt));
-    // Modify data in DB
-    stmt = CharacterDatabase.GetPreparedStatement(hasTutorials ? CHAR_UPD_TUTORIALS : CHAR_INS_TUTORIALS);
+    bool const hasTutorialsInDB = (_tutorialsChanged & TUTORIALS_FLAG_LOADED_FROM_DB) != 0;
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(hasTutorialsInDB ? CHAR_UPD_TUTORIALS : CHAR_INS_TUTORIALS);
     for (uint8 i = 0; i < MAX_ACCOUNT_TUTORIAL_VALUES; ++i)
         stmt->setUInt32(i, _tutorials[i]);
     stmt->setUInt32(MAX_ACCOUNT_TUTORIAL_VALUES, GetAccountId());
     trans->Append(stmt);
 
-    _tutorialsChanged = false;
+    // now has, set flag so next save uses update query
+    if (!hasTutorialsInDB)
+        _tutorialsChanged |= TUTORIALS_FLAG_LOADED_FROM_DB;
+
+    _tutorialsChanged &= ~TUTORIALS_FLAG_CHANGED;
 }
 
 bool WorldSession::IsAddonRegistered(const std::string& prefix) const
@@ -874,15 +878,22 @@ void WorldSession::SetPlayer(Player* player)
 
 void WorldSession::ProcessQueryCallbacks()
 {
-    _queryProcessor.ProcessReadyQueries();
+    _queryProcessor.ProcessReadyCallbacks();
+    _transactionCallbacks.ProcessReadyCallbacks();
 
     if (_realmAccountLoginCallback.valid() && _realmAccountLoginCallback.wait_for(std::chrono::seconds(0)) == std::future_status::ready &&
         _accountLoginCallback.valid() && _accountLoginCallback.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
-        InitializeSessionCallback(_realmAccountLoginCallback.get(), _accountLoginCallback.get());
+        InitializeSessionCallback(static_cast<LoginDatabaseQueryHolder*>(_realmAccountLoginCallback.get()),
+            static_cast<CharacterDatabaseQueryHolder*>(_accountLoginCallback.get()));
 
     //! HandlePlayerLoginOpcode
     if (_charLoginCallback.valid() && _charLoginCallback.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
         HandlePlayerLogin(reinterpret_cast<LoginQueryHolder*>(_charLoginCallback.get()));
+}
+
+TransactionCallback& WorldSession::AddTransactionCallback(TransactionCallback&& callback)
+{
+    return _transactionCallbacks.AddCallback(std::move(callback));
 }
 
 void WorldSession::InitWarden(BigNumber* k)
@@ -926,7 +937,7 @@ QueryCallback WorldSession::LoadPermissionsAsync()
     return _RBACData->LoadFromDBAsync();
 }
 
-class AccountInfoQueryHolderPerRealm : public SQLQueryHolder
+class AccountInfoQueryHolderPerRealm : public CharacterDatabaseQueryHolder
 {
 public:
     enum
@@ -943,7 +954,7 @@ public:
     {
         bool ok = true;
 
-        PreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_ACCOUNT_DATA);
+        CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_ACCOUNT_DATA);
         stmt->setUInt32(0, accountId);
         ok = SetPreparedQuery(GLOBAL_ACCOUNT_DATA, stmt) && ok;
 
@@ -955,7 +966,7 @@ public:
     }
 };
 
-class AccountInfoQueryHolder : public SQLQueryHolder
+class AccountInfoQueryHolder : public LoginDatabaseQueryHolder
 {
 public:
     enum
@@ -978,7 +989,7 @@ public:
     {
         bool ok = true;
 
-        PreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_TOYS);
+        LoginDatabasePreparedStatement* stmt = LoginDatabase.GetPreparedStatement(LOGIN_SEL_ACCOUNT_TOYS);
         stmt->setUInt32(0, battlenetAccountId);
         ok = SetPreparedQuery(GLOBAL_ACCOUNT_TOYS, stmt) && ok;
 
@@ -1037,7 +1048,7 @@ void WorldSession::InitializeSession()
     _accountLoginCallback = LoginDatabase.DelayQueryHolder(holder);
 }
 
-void WorldSession::InitializeSessionCallback(SQLQueryHolder* realmHolder, SQLQueryHolder* holder)
+void WorldSession::InitializeSessionCallback(LoginDatabaseQueryHolder* realmHolder, CharacterDatabaseQueryHolder* holder)
 {
     LoadAccountData(realmHolder->GetPreparedResult(AccountInfoQueryHolderPerRealm::GLOBAL_ACCOUNT_DATA), GLOBAL_CACHE_MASK);
     LoadTutorialsData(realmHolder->GetPreparedResult(AccountInfoQueryHolderPerRealm::TUTORIALS));

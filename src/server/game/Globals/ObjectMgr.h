@@ -30,6 +30,7 @@
 #include "ObjectGuid.h"
 #include "Position.h"
 #include "QuestDef.h"
+#include "RaceMask.h"
 #include "SharedDefines.h"
 #include "Trainer.h"
 #include "VehicleDefines.h"
@@ -608,10 +609,10 @@ struct PetLevelInfo
 
 struct MailLevelReward
 {
-    MailLevelReward() : raceMask(0), mailTemplateId(0), senderEntry(0) { }
-    MailLevelReward(uint32 _raceMask, uint32 _mailTemplateId, uint32 _senderEntry) : raceMask(_raceMask), mailTemplateId(_mailTemplateId), senderEntry(_senderEntry) { }
+    MailLevelReward() : raceMask({ 0 }), mailTemplateId(0), senderEntry(0) { }
+    MailLevelReward(uint32 _raceMask, uint32 _mailTemplateId, uint32 _senderEntry) : raceMask({ _raceMask }), mailTemplateId(_mailTemplateId), senderEntry(_senderEntry) { }
 
-    uint32 raceMask;
+    Trinity::RaceMask<uint64> raceMask;
     uint32 mailTemplateId;
     uint32 senderEntry;
 };
@@ -716,14 +717,14 @@ struct QuestPOI
     int32 Flags;
     int32 WorldEffectID;
     int32 PlayerConditionID;
-    int32 UnkWoD1;
+    int32 SpawnTrackingID;
     std::vector<QuestPOIPoint> points;
     bool AlwaysAllowMergingBlobs;
 
-    QuestPOI() : BlobIndex(0), ObjectiveIndex(0), QuestObjectiveID(0), QuestObjectID(0), MapID(0), WorldMapAreaID(0), Floor(0), Priority(0), Flags(0), WorldEffectID(0), PlayerConditionID(0), UnkWoD1(0), AlwaysAllowMergingBlobs(false){ }
-    QuestPOI(int32 _BlobIndex, int32 _ObjectiveIndex, int32 _QuestObjectiveID, int32 _QuestObjectID, int32 _MapID, int32 _WorldMapAreaID, int32 _Foor, int32 _Priority, int32 _Flags, int32 _WorldEffectID, int32 _PlayerConditionID, int32 _UnkWoD1, bool _AlwaysAllowMergingBlobs) :
+    QuestPOI() : BlobIndex(0), ObjectiveIndex(0), QuestObjectiveID(0), QuestObjectID(0), MapID(0), WorldMapAreaID(0), Floor(0), Priority(0), Flags(0), WorldEffectID(0), PlayerConditionID(0), SpawnTrackingID(0), AlwaysAllowMergingBlobs(false){ }
+    QuestPOI(int32 _BlobIndex, int32 _ObjectiveIndex, int32 _QuestObjectiveID, int32 _QuestObjectID, int32 _MapID, int32 _WorldMapAreaID, int32 _Foor, int32 _Priority, int32 _Flags, int32 _WorldEffectID, int32 _PlayerConditionID, int32 _SpawnTrackingID, bool _AlwaysAllowMergingBlobs) :
         BlobIndex(_BlobIndex), ObjectiveIndex(_ObjectiveIndex), QuestObjectiveID(_QuestObjectiveID), QuestObjectID(_QuestObjectID), MapID(_MapID), WorldMapAreaID(_WorldMapAreaID),
-        Floor(_Foor), Priority(_Priority), Flags(_Flags), WorldEffectID(_WorldEffectID), PlayerConditionID(_PlayerConditionID), UnkWoD1(_UnkWoD1), AlwaysAllowMergingBlobs(_AlwaysAllowMergingBlobs) { }
+        Floor(_Foor), Priority(_Priority), Flags(_Flags), WorldEffectID(_WorldEffectID), PlayerConditionID(_PlayerConditionID), SpawnTrackingID(_SpawnTrackingID), AlwaysAllowMergingBlobs(_AlwaysAllowMergingBlobs) { }
 };
 
 typedef std::vector<QuestPOI> QuestPOIVector;
@@ -980,8 +981,6 @@ class TC_GAME_API ObjectMgr
 
         void GetPlayerLevelInfo(uint32 race, uint32 class_, uint8 level, PlayerLevelInfo* info) const;
 
-        static ObjectGuid GetPlayerGUIDByName(std::string const& name);
-
         std::vector<uint32> const* GetGameObjectQuestItemList(uint32 id) const
         {
             GameObjectQuestItemMap::const_iterator itr = _gameObjectQuestItemStore.find(id);
@@ -999,25 +998,6 @@ class TC_GAME_API ObjectMgr
             return nullptr;
         }
         CreatureQuestItemMap const* GetCreatureQuestItemMap() const { return &_creatureQuestItemStore; }
-
-        /**
-        * Retrieves the player name by guid.
-        *
-        * If the player is online, the name is retrieved immediately otherwise
-        * a database query is done.
-        *
-        * @remark Use sWorld->GetCharacterNameData because it doesn't require a database query when player is offline
-        *
-        * @param guid player full guid
-        * @param name returned name
-        *
-        * @return true if player was found, false otherwise
-        */
-        static bool GetPlayerNameByGUID(ObjectGuid const& guid, std::string& name);
-        static bool GetPlayerNameAndClassByGUID(ObjectGuid const& guid, std::string& name, uint8& _class);
-        static uint32 GetPlayerTeamByGUID(ObjectGuid const& guid);
-        static uint32 GetPlayerAccountIdByGUID(ObjectGuid const& guid);
-        static uint32 GetPlayerAccountIdByPlayerName(std::string const& name);
 
         uint32 GetNearestTaxiNode(float x, float y, float z, uint32 mapid, uint32 team);
         void GetTaxiPath(uint32 source, uint32 destination, uint32 &path, uint32 &cost);
@@ -1308,14 +1288,14 @@ class TC_GAME_API ObjectMgr
 
         ExclusiveQuestGroups mExclusiveQuestGroups;
 
-        MailLevelReward const* GetMailLevelReward(uint8 level, uint32 raceMask)
+        MailLevelReward const* GetMailLevelReward(uint8 level, uint8 race)
         {
             MailLevelRewardContainer::const_iterator map_itr = _mailLevelRewardStore.find(level);
             if (map_itr == _mailLevelRewardStore.end())
                 return nullptr;
 
             for (auto const& mailLevelReward : map_itr->second)
-                if (mailLevelReward.raceMask & raceMask)
+                if (mailLevelReward.raceMask.HasRace(race))
                     return &mailLevelReward;
 
             return nullptr;
@@ -1586,9 +1566,8 @@ class TC_GAME_API ObjectMgr
         // first free id for selected id type
         uint32 _auctionId;
         uint64 _equipmentSetGuid;
-        uint32 _itemTextId;
-        uint32 _mailId;
-        uint32 _hiPetNumber;
+        std::atomic<uint32> _mailId;
+        std::atomic<uint32> _hiPetNumber;
         uint64 _voidItemId;
         uint64 _creatureSpawnId;
         uint64 _gameObjectSpawnId;

@@ -91,7 +91,7 @@ void CreatureTextMgr::LoadCreatureTexts()
     mTextMap.clear(); // for reload case
     //all currently used temp texts are NOT reset
 
-    PreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_TEXT);
+    WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_CREATURE_TEXT);
     PreparedQueryResult result = WorldDatabase.Query(stmt);
 
     if (!result)
@@ -438,7 +438,7 @@ std::string CreatureTextMgr::GetLocalizedChatString(uint32 entry, uint8 gender, 
     if (groupItr == holderItr->second.end())
         return "";
 
-    if (locale > MAX_LOCALES)
+    if (locale >= TOTAL_LOCALES)
         locale = DEFAULT_LOCALE;
 
     std::string baseText = "";
