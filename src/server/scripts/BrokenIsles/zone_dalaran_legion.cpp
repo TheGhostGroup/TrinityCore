@@ -16,32 +16,13 @@
 */
 
 #include "ScriptMgr.h"
-#include "ScriptedCreature.h"
-#include "ScriptedGossip.h"
-#include "SpellScript.h"
 #include "Player.h"
 #include "PhasingHandler.h"
-#include "Group.h"
 
 enum BlinkOfAnEye
 {
-    MAP_BROKEN_ISLES = 1220,
-    KILL_CREDIT_TELEPORT_DALARAN = 114506,
-    QUEST_BLINK_OF_AN_EYE        = 446633,
-    NPC_EMISSARY_AULDBRIDGE      = 111109,
-
-    ACTION_AULDBRIDGE_FIRST_LINE,
-    EVENT_AULDBRIDGE_SAY_FIRST_LINE,
-    EVENT_AULDBRIDGE_SAY_SECOND_LINE,
-    EVENT_AULDBRIDGE_SAY_THIRD_LINE,
-    EVENT_AULDBRIDGE_WAYPOINT_START,
-    SAY_AULDBRIDGE_FIRST_LINE = 0,
-    SAY_AULDBRIDGE_SECOND_LINE = 1,
-    SAY_AULDBRIDGE_THIRD_LINE = 2,
-
-    AULDBRIDGE_PATH = 11110910,
-
-    WAYPOINT_22,
+    MAP_BROKEN_ISLES              = 1220,
+    KILL_CREDIT_TELEPORT_DALARAN  = 114506,
 
 	SPELL_SUMMON_WARRIOR_HORDE    = 216443, 
     SPELL_SUMMON_WARRIOR_ALLIANCE = 216497, 
@@ -88,95 +69,7 @@ public:
     }
 };
 
-struct npc_emissary_auldbridge_111109 : public ScriptedAI
-{
-    npc_emissary_auldbridge_111109(Creature* creature) : ScriptedAI(creature) { Initialize(); }
-
-    EventMap events;
-    std::set<ObjectGuid> pList;
-    ObjectGuid   m_playerGUID;
-
-    void Initialize()
-    {
-        m_playerGUID = ObjectGuid::Empty;
-    }
-
-    void sQuestReward(Player* player, Quest const* quest, uint32 /*opt*/)  override
-    {
-        if (quest->GetQuestId() == QUEST_BLINK_OF_AN_EYE)
-        {
-            if (Creature* auldbridge = me->FindNearestCreature(NPC_EMISSARY_AULDBRIDGE, 5.0f))
-                if (TempSummon* waypointAuldbridge = player->SummonCreature(auldbridge->GetEntry(), auldbridge->GetPosition(), TEMPSUMMON_TIMED_DESPAWN, 60000, 0, true))
-                    waypointAuldbridge->AI()->DoAction(ACTION_AULDBRIDGE_FIRST_LINE);
-            m_playerGUID = player->GetGUID();
-            PhasingHandler::OnConditionChange(player);
-        }
-    }
-
-    void UpdateAI(uint32 diff) override
-    {
-        events.Update(diff);
-        while (uint32 eventId = events.ExecuteEvent())
-        {
-            switch (eventId)
-            {
-                case EVENT_AULDBRIDGE_SAY_FIRST_LINE:
-                {
-                    Talk(SAY_AULDBRIDGE_FIRST_LINE);
-                    events.ScheduleEvent(EVENT_AULDBRIDGE_SAY_SECOND_LINE, 3s);
-                    break;
-                }
-                case EVENT_AULDBRIDGE_SAY_SECOND_LINE:
-                {
-                    Talk(SAY_AULDBRIDGE_SECOND_LINE);
-                    events.ScheduleEvent(EVENT_AULDBRIDGE_SAY_THIRD_LINE, 3s);
-                    break;
-                }
-                case EVENT_AULDBRIDGE_SAY_THIRD_LINE:
-                {
-                    Talk(SAY_AULDBRIDGE_THIRD_LINE);
-                    events.ScheduleEvent(EVENT_AULDBRIDGE_WAYPOINT_START, 3s);
-                    break;
-                }
-                case EVENT_AULDBRIDGE_WAYPOINT_START:
-                {
-                    me->GetMotionMaster()->MovePath(AULDBRIDGE_PATH, false);
-                    break;
-                }
-            }
-        }
-    }
-
-    void DoAction(int32 action) override
-    {
-        switch (action)
-        {
-            case ACTION_AULDBRIDGE_FIRST_LINE:
-            {
-                events.ScheduleEvent(EVENT_AULDBRIDGE_SAY_FIRST_LINE, 1s);
-                break;
-            }
-        }
-    }
-
-    void WaypointReached(uint32 pointId)
-    {
-        switch (pointId)
-        {
-            case WAYPOINT_22:
-            {
-                me->DespawnOrUnsummon();
-                break;
-            }
-            default:
-                break;
-        }
-    }
-
-};
-
 void AddSC_dalaran_legion()
 {
     new scene_dalaran_teleportation();
-    RegisterCreatureAI(npc_emissary_auldbridge_111109);
 }
