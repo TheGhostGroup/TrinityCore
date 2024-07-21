@@ -19,8 +19,42 @@
 #include "PhasingHandler.h"
 #include "Player.h"
 
+enum BlinkOfAnEye
+{
+    MAP_BROKEN_ISLES = 1220,
+    KILL_CREDIT_TELEPORT_DALARAN = 114506,
+};
+
+class scene_dalaran_teleportation : public SceneScript
+{
+public:
+    scene_dalaran_teleportation() : SceneScript("scene_dalaran_teleportation") { }
+
+    void OnSceneStart(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        player->KilledMonsterCredit(KILL_CREDIT_TELEPORT_DALARAN);
+    }
+
+    // Called when a scene is canceled
+    void OnSceneCancel(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        SceneFinished(player);
+    }
+
+    // Called when a scene is completed
+    void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        SceneFinished(player);
+    }
+
+    void SceneFinished(Player* player)
+    {
+        player->TeleportTo(MAP_BROKEN_ISLES, -827.82f, 4369.25f, 738.64f, 1.893364f);
+        PhasingHandler::OnConditionChange(player);
+    }
+};
 
 void AddSC_dalaran_deadwind()
 {
-
+    new scene_dalaran_teleportation();
 }

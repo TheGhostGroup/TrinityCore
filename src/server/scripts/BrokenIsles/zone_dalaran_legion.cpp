@@ -19,11 +19,8 @@
 #include "Player.h"
 #include "PhasingHandler.h"
 
-enum BlinkOfAnEye
+enum OrderHallSpells
 {
-    MAP_BROKEN_ISLES              = 1220,
-    KILL_CREDIT_TELEPORT_DALARAN  = 114506,
-
 	SPELL_SUMMON_WARRIOR_HORDE    = 216443, 
     SPELL_SUMMON_WARRIOR_ALLIANCE = 216497, 
     SPELL_SUMMON_PALADIN          = 190886,
@@ -40,36 +37,7 @@ enum BlinkOfAnEye
     SPELL_SUMMON_DH               = 195286
 };
 
-class scene_dalaran_teleportation : public SceneScript
-{
-public:
-    scene_dalaran_teleportation() : SceneScript("scene_dalaran_teleportation") { }
-
-    void OnSceneStart(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
-    {
-        player->KilledMonsterCredit(KILL_CREDIT_TELEPORT_DALARAN);
-    }
-
-    // Called when a scene is canceled
-    void OnSceneCancel(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
-    {
-        SceneFinished(player);
-    }
-
-    // Called when a scene is completed
-    void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
-    {
-        SceneFinished(player);
-    }
-
-    void SceneFinished(Player* player)
-    {
-        player->TeleportTo(MAP_BROKEN_ISLES, -827.82f, 4369.25f, 738.64f, 1.893364f);
-        PhasingHandler::OnConditionChange(player);
-    }
-};
-
 void AddSC_dalaran_legion()
 {
-    new scene_dalaran_teleportation();
+
 }
