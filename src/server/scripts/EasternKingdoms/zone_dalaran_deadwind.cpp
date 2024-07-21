@@ -15,6 +15,10 @@
 * with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "ScriptMgr.h"
+#include "PhasingHandler.h"
+#include "Player.h"
+
 
 void AddSC_dalaran_deadwind()
 {

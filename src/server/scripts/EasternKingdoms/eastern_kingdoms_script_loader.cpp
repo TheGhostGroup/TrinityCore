@@ -67,6 +67,7 @@ void AddSC_boss_flamegor();
 void AddSC_boss_chromaggus();
 void AddSC_boss_nefarian();
 void AddSC_instance_blackwing_lair();
+void AddSC_dalaran_deadwind();                //Dalaran Deadwind
 void AddSC_deadmines();                      //Deadmines
 void AddSC_instance_deadmines();
 void AddSC_boss_glubtok();
@@ -260,6 +261,7 @@ void AddEasternKingdomsScripts()
     AddSC_boss_chromaggus();
     AddSC_boss_nefarian();
     AddSC_instance_blackwing_lair();
+    AddSC_dalaran_deadwind();               //Dalaran Deadwind
     AddSC_deadmines();                      //Deadmines
     AddSC_instance_deadmines();
     AddSC_boss_glubtok();
