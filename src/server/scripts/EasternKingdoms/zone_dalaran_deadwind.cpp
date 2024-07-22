@@ -21,8 +21,8 @@
 
 enum BlinkOfAnEye
 {
-    MAP_BROKEN_ISLES = 1220,
-    KILL_CREDIT_TELEPORT_DALARAN = 114506,
+    MAP_BROKEN_ISLES                = 1220,
+    KILL_CREDIT_TELEPORT_DALARAN    = 114506,
 };
 
 class scene_dalaran_teleportation : public SceneScript
