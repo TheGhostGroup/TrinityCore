@@ -25,36 +25,29 @@ enum BlinkOfAnEye
     KILL_CREDIT_TELEPORT_DALARAN    = 114506,
 };
 
-class scene_dalaran_teleportation : public SceneScript
+class scene_dalaran_teleport : public SceneScript
 {
 public:
-    scene_dalaran_teleportation() : SceneScript("scene_dalaran_teleportation") { }
-
-    void OnSceneStart(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
-    {
-        player->KilledMonsterCredit(KILL_CREDIT_TELEPORT_DALARAN);
-    }
+    scene_dalaran_teleport() : SceneScript("scene_dalaran_teleport") { }
 
     // Called when a scene is canceled
     void OnSceneCancel(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
     {
-        SceneFinished(player);
+        player->TeleportTo(MAP_BROKEN_ISLES, -827.82f, 4369.25f, 738.64f, 1.893364f);
+        player->KilledMonsterCredit(KILL_CREDIT_TELEPORT_DALARAN);
+        PhasingHandler::OnConditionChange(player);
     }
 
     // Called when a scene is completed
     void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
     {
-        SceneFinished(player);
-    }
-
-    void SceneFinished(Player* player)
-    {
         player->TeleportTo(MAP_BROKEN_ISLES, -827.82f, 4369.25f, 738.64f, 1.893364f);
+        player->KilledMonsterCredit(KILL_CREDIT_TELEPORT_DALARAN);
         PhasingHandler::OnConditionChange(player);
     }
 };
 
 void AddSC_dalaran_deadwind()
 {
-    new scene_dalaran_teleportation();
+    new scene_dalaran_teleport();
 }
