@@ -18,6 +18,8 @@
 #include "GameObject.h"
 #include "GameObjectAI.h"
 #include "Player.h"
+#include "PhasingHandler.h"
+#include "QuestDef.h"
 #include "ScriptedCreature.h"
 #include "ScriptMgr.h"
 #include "Unit.h"
@@ -39,6 +41,9 @@ enum CreatureText
     // Dark Portal
     SAY_KHADGAR_FIRST_LINE              = 0,
     SAY_KHADGAR_SECOND_LINE             = 1,
+    SAY_KHADGAR_THIRD_LINE              = 2,
+    SAY_KHADGAR_FOURTH_LINE             = 3,
+    SAY_KHADGAR_FIFTH_LINE              = 4,
 };
 
 enum Quests
@@ -65,6 +70,7 @@ enum Spells
     // Dark Portal
     SPELL_ARCANE_AEGIS                  = 165667,
     SPELL_INCOMING_CAPSULE              = 165666,
+    SPELL_DARK_PORTAL_RUN_AWAY          = 158985,
 };
 
 class npc_archmage_khadgar_78558 : public CreatureScript
@@ -78,12 +84,12 @@ public:
         {
         case QUEST_AZEROTHS_LAST_STAND:
             if (creature->IsAIEnabled)
-                creature->AI()->Talk(SAY_KHADGAR_FIRST_LINE);
+                creature->AI()->Talk(SAY_KHADGAR_FIRST_LINE, player);
             break;
 
         case QUEST_THE_PORTALS_POWER:
             if (creature->IsAIEnabled)
-                creature->AI()->Talk(SAY_KHADGAR_SECOND_LINE);
+                creature->AI()->Talk(SAY_KHADGAR_FIFTH_LINE, player);
             break;
 
         default:
@@ -161,6 +167,17 @@ public:
     }
 };
 
+class scene_dark_portal_run_away : public SceneScript
+{
+public:
+    scene_dark_portal_run_away() : SceneScript("scene_dark_portal_run_away") { }
+
+    void OnSceneComplete(Player* player, uint32 /*sceneInstanceID*/, SceneTemplate const* /*sceneTemplate*/) override
+    {
+        player->RemoveAurasDueToSpell(SPELL_DARK_PORTAL_RUN_AWAY);
+        PhasingHandler::OnConditionChange(player);
+    }
+};
 
 void AddSC_zone_draenor_darkportal_assault()
 {
