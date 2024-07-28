@@ -44,6 +44,9 @@ enum CreatureText
     SAY_KHADGAR_THIRD_LINE              = 2,
     SAY_KHADGAR_FOURTH_LINE             = 3,
     SAY_KHADGAR_FIFTH_LINE              = 4,
+
+    SAY_THAELIN_FIRST_LINE              = 0,
+    SAY_HANSEL_FIRST_LINE               = 0,
 };
 
 enum Quests
@@ -71,6 +74,11 @@ enum Spells
     SPELL_ARCANE_AEGIS                  = 165667,
     SPELL_INCOMING_CAPSULE              = 165666,
     SPELL_DARK_PORTAL_RUN_AWAY          = 158985,
+
+    // Scene Auras
+    SPELL_THAELIN_EVENT_AURA            = 164677,
+    SPELL_HANSEL_EVENT_AURA             = 167689,
+
 };
 
 class npc_archmage_khadgar_78558 : public CreatureScript
@@ -143,6 +151,86 @@ public:
     }
 };
 
+class npc_thaelin_darkanvil_78568 : public CreatureScript
+{
+public:
+    npc_thaelin_darkanvil_78568() : CreatureScript("npc_thaelin_darkanvil_78568") {}
+
+    struct npc_thaelin_darkanvil_78568AI : public ScriptedAI
+    {
+        npc_thaelin_darkanvil_78568AI(Creature* creature) : ScriptedAI(creature)
+        {
+            trigger = false;
+        }
+
+        bool trigger;
+
+        void MoveInLineOfSight(Unit* who) override
+        {
+            if (Player* player = who->ToPlayer())
+            {
+                if (!me->IsWithinDistInMap(player, 15.0f))
+                    return;
+
+                if (player->GetQuestStatus(QUEST_ONSLAUGHTS_END) == QUEST_STATUS_INCOMPLETE)
+                {
+                    if (!trigger)
+                    {
+                        Talk(SAY_THAELIN_FIRST_LINE, player);
+                        player->AddAura(SPELL_THAELIN_EVENT_AURA, player);
+                        trigger = true;
+                    }
+                }
+            }
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_thaelin_darkanvil_78568AI(creature);
+    }
+};
+
+class npc_hansel_heavyhands_78569 : public CreatureScript
+{
+public:
+    npc_hansel_heavyhands_78569() : CreatureScript("npc_hansel_heavyhands_78569") {}
+
+    struct npc_hansel_heavyhands_78569AI : public ScriptedAI
+    {
+        npc_hansel_heavyhands_78569AI(Creature* creature) : ScriptedAI(creature)
+        {
+            trigger = false;
+        }
+
+        bool trigger;
+
+        void MoveInLineOfSight(Unit* who) override
+        {
+            if (Player* player = who->ToPlayer())
+            {
+                if (!me->IsWithinDistInMap(player, 15.0f))
+                    return;
+
+                if (player->GetQuestStatus(QUEST_ONSLAUGHTS_END) == QUEST_STATUS_INCOMPLETE)
+                {
+                    if (!trigger)
+                    {
+                        Talk(SAY_HANSEL_FIRST_LINE, player);
+                        player->AddAura(SPELL_HANSEL_EVENT_AURA, player);
+                        trigger = true;
+                    } 
+                }
+            }
+        }
+    };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_hansel_heavyhands_78569AI(creature);
+    }
+};
+
 // 237670 - Dark Portal
 class go_dark_portal : public GameObjectScript
 {
@@ -182,5 +270,7 @@ public:
 void AddSC_zone_draenor_darkportal_assault()
 {
     new npc_archmage_khadgar_78558();
+    new npc_thaelin_darkanvil_78568();
+    new npc_hansel_heavyhands_78569();
     new go_dark_portal();
 };
