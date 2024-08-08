@@ -63,7 +63,7 @@ enum Scenes
     // Dark Portal
     SCENE_CHOGALL_FREED                 = 961,
     SCENE_TERONGOR_FREED                = 962,
-    SCENE_DETONATION_DWARVES            = 937,
+    SCENE_DETONATION                    = 937,
     SCENE_GULDAN_REVEAL                 = 925,
     SCENE_GULDAN_FREED                  = 808,
 };
@@ -177,7 +177,7 @@ public:
                     if (!trigger)
                     {
                         Talk(SAY_THAELIN_FIRST_LINE, player);
-                        player->AddAura(SPELL_THAELIN_EVENT_AURA, player);
+                        player->GetSceneMgr().PlaySceneByPackageId(SCENE_DETONATION);
                         trigger = true;
                     }
                 }
@@ -217,7 +217,7 @@ public:
                     if (!trigger)
                     {
                         Talk(SAY_HANSEL_FIRST_LINE, player);
-                        player->AddAura(SPELL_HANSEL_EVENT_AURA, player);
+                        player->GetSceneMgr().PlaySceneByPackageId(SCENE_DETONATION);
                         trigger = true;
                     } 
                 }
