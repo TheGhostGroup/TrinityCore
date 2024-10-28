@@ -1158,8 +1158,9 @@ enum class ZonePVPTypeOverride : uint32
 struct TeleportLocation
 {
     WorldLocation Location;
-    Optional<uint32> InstanceId;
     Optional<ObjectGuid> TransportGuid;
+    Optional<uint32> InstanceId;
+    Optional<uint32> LfgDungeonsId;
 };
 
 class TC_GAME_API Player final : public Unit, public GridObject<Player>
@@ -1872,7 +1873,7 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void SendRemoveControlBar() const;
         bool HasSpell(uint32 spell) const override;
         bool HasActiveSpell(uint32 spell) const;            // show in spellbook
-        SpellInfo const* GetCastSpellInfo(SpellInfo const* spellInfo, TriggerCastFlags& triggerFlag) const override;
+        SpellInfo const* GetCastSpellInfo(SpellInfo const* spellInfo, TriggerCastFlags& triggerFlag, GetCastSpellInfoContext* context) const override;
         bool IsSpellFitByClassAndRace(uint32 spell_id) const;
         bool HandlePassiveSpellLearn(SpellInfo const* spellInfo);
 
@@ -2186,8 +2187,8 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
 
     protected:
         UF::UpdateFieldFlag GetUpdateFieldFlagsFor(Player const* target) const override;
-        void BuildValuesCreate(ByteBuffer* data, Player const* target) const override;
-        void BuildValuesUpdate(ByteBuffer* data, Player const* target) const override;
+        void BuildValuesCreate(ByteBuffer* data, UF::UpdateFieldFlag flags, Player const* target) const override;
+        void BuildValuesUpdate(ByteBuffer* data, UF::UpdateFieldFlag flags, Player const* target) const override;
         void ClearUpdateMask(bool remove) override;
 
     public:
@@ -2313,7 +2314,10 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         void RemoveExploredZones(uint32 pos, uint64 mask);
         bool HasExploredZone(uint32 areaId) const;
 
-        void CheckOutdoorsAuraRequirements();
+        // These methods are used to periodically update certain area and aura based mechanics used in Heartbeat and Movement
+        void UpdateZoneAndAreaId();
+        void UpdateIndoorsOutdoorsAuras();
+        void UpdateTavernRestingState();
 
         static Team TeamForRace(uint8 race);
         static TeamId TeamIdForRace(uint8 race);
@@ -3176,7 +3180,6 @@ class TC_GAME_API Player final : public Unit, public GridObject<Player>
         uint32 m_weaponChangeTimer;
 
         uint32 m_zoneUpdateId;
-        uint32 m_zoneUpdateTimer;
         uint32 m_areaUpdateId;
 
         uint32 m_deathTimer;

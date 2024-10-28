@@ -177,7 +177,14 @@ void Object::BuildCreateUpdateBlockForPlayer(UpdateData* data, Player* target) c
     buf << uint8(objectType);
 
     BuildMovementUpdate(&buf, flags, target);
-    BuildValuesCreate(&buf, target);
+
+    UF::UpdateFieldFlag fieldFlags = GetUpdateFieldFlagsFor(target);
+    std::size_t sizePos = buf.wpos();
+    buf << uint32(0);
+    buf << uint8(fieldFlags);
+    BuildValuesCreate(&buf, fieldFlags, target);
+    buf.put<uint32>(sizePos, buf.wpos() - sizePos - 4);
+
     data->AddUpdateBlock();
 }
 
@@ -199,7 +206,11 @@ void Object::BuildValuesUpdateBlockForPlayer(UpdateData* data, Player const* tar
 {
     ByteBuffer& buf = PrepareValuesUpdateBuffer(data);
 
-    BuildValuesUpdate(&buf, target);
+    EnumFlag<UF::UpdateFieldFlag> fieldFlags = GetUpdateFieldFlagsFor(target);
+    std::size_t sizePos = buf.wpos();
+    buf << uint32(0);
+    BuildValuesUpdate(&buf, fieldFlags, target);
+    buf.put<uint32>(sizePos, buf.wpos() - sizePos - 4);
 
     data->AddUpdateBlock();
 }
@@ -208,7 +219,10 @@ void Object::BuildValuesUpdateBlockForPlayerWithFlag(UpdateData* data, UF::Updat
 {
     ByteBuffer& buf = PrepareValuesUpdateBuffer(data);
 
+    std::size_t sizePos = buf.wpos();
+    buf << uint32(0);
     BuildValuesUpdateWithFlag(&buf, flags, target);
+    buf.put<uint32>(sizePos, buf.wpos() - sizePos - 4);
 
     data->AddUpdateBlock();
 }
@@ -253,7 +267,7 @@ void Object::SendOutOfRangeForPlayer(Player* target) const
     target->SendDirectMessage(&packet);
 }
 
-void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags, Player* target) const
+void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags, Player const* target) const
 {
     std::vector<uint32> const* PauseTimes = nullptr;
     if (GameObject const* go = ToGameObject())
@@ -372,23 +386,23 @@ void Object::BuildMovementUpdate(ByteBuffer* data, CreateObjectBits flags, Playe
             *data << float(1.0f);                                       // MovementForcesModMagnitude
         }
 
-        *data << float(2.0f);                                           // advFlyingAirFriction
-        *data << float(65.0f);                                          // advFlyingMaxVel
-        *data << float(1.0f);                                           // advFlyingLiftCoefficient
-        *data << float(3.0f);                                           // advFlyingDoubleJumpVelMod
-        *data << float(10.0f);                                          // advFlyingGlideStartMinHeight
-        *data << float(100.0f);                                         // advFlyingAddImpulseMaxSpeed
-        *data << float(90.0f);                                          // advFlyingMinBankingRate
-        *data << float(140.0f);                                         // advFlyingMaxBankingRate
-        *data << float(180.0f);                                         // advFlyingMinPitchingRateDown
-        *data << float(360.0f);                                         // advFlyingMaxPitchingRateDown
-        *data << float(90.0f);                                          // advFlyingMinPitchingRateUp
-        *data << float(270.0f);                                         // advFlyingMaxPitchingRateUp
-        *data << float(30.0f);                                          // advFlyingMinTurnVelocityThreshold
-        *data << float(80.0f);                                          // advFlyingMaxTurnVelocityThreshold
-        *data << float(2.75f);                                          // advFlyingSurfaceFriction
-        *data << float(7.0f);                                           // advFlyingOverMaxDeceleration
-        *data << float(0.4f);                                           // advFlyingLaunchSpeedCoefficient
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_AIR_FRICTION));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_MAX_VEL));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_LIFT_COEFFICIENT));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_DOUBLE_JUMP_VEL_MOD));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_GLIDE_START_MIN_HEIGHT));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_ADD_IMPULSE_MAX_SPEED));
+        *data << float(unit->GetAdvFlyingSpeedMin(ADV_FLYING_BANKING_RATE));
+        *data << float(unit->GetAdvFlyingSpeedMax(ADV_FLYING_BANKING_RATE));
+        *data << float(unit->GetAdvFlyingSpeedMin(ADV_FLYING_PITCHING_RATE_DOWN));
+        *data << float(unit->GetAdvFlyingSpeedMax(ADV_FLYING_PITCHING_RATE_DOWN));
+        *data << float(unit->GetAdvFlyingSpeedMin(ADV_FLYING_PITCHING_RATE_UP));
+        *data << float(unit->GetAdvFlyingSpeedMax(ADV_FLYING_PITCHING_RATE_UP));
+        *data << float(unit->GetAdvFlyingSpeedMin(ADV_FLYING_TURN_VELOCITY_THRESHOLD));
+        *data << float(unit->GetAdvFlyingSpeedMax(ADV_FLYING_TURN_VELOCITY_THRESHOLD));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_SURFACE_FRICTION));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_OVER_MAX_DECELERATION));
+        *data << float(unit->GetAdvFlyingSpeed(ADV_FLYING_LAUNCH_SPEED_COEFFICIENT));
 
         data->WriteBit(HasSpline);
         data->FlushBits();
@@ -807,15 +821,7 @@ void Object::ClearUpdateMask(bool remove)
 
 void Object::BuildFieldsUpdate(Player* player, UpdateDataMapType& data_map) const
 {
-    UpdateDataMapType::iterator iter = data_map.find(player);
-
-    if (iter == data_map.end())
-    {
-        std::pair<UpdateDataMapType::iterator, bool> p = data_map.emplace(player, UpdateData(player->GetMapId()));
-        ASSERT(p.second);
-        iter = p.first;
-    }
-
+    UpdateDataMapType::iterator iter = data_map.try_emplace(player, player->GetMapId()).first;
     BuildValuesUpdateBlockForPlayer(&iter->second, iter->first);
 }
 
