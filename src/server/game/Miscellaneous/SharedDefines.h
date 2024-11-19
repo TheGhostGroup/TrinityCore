@@ -3071,6 +3071,7 @@ enum GameObjectDynamicLowFlags : uint16
     GO_DYNFLAG_LO_INVERTED_MOVEMENT = 0x0100,               // GAMEOBJECT_TYPE_TRANSPORT only
     GO_DYNFLAG_LO_INTERACT_COND     = 0x0200,               // Cannot interact (requires GO_DYNFLAG_LO_ACTIVATE to enable interaction clientside)
     GO_DYNFLAG_LO_HIGHLIGHT         = 0x4000,               // Allows object highlight when GO_DYNFLAG_LO_ACTIVATE are set, not only when player is on quest determined by Data fields
+    GO_DYNFLAG_LO_STATE_TRANSITION_ANIM_DONE = 0x8000,      // don't play state transition anim on entering visibility
 };
 
 // client side GO show states
@@ -6212,13 +6213,12 @@ enum DiminishingGroup : uint16
 
 enum SummonCategory
 {
-    SUMMON_CATEGORY_WILD        = 0,
-    SUMMON_CATEGORY_ALLY        = 1,
-    SUMMON_CATEGORY_PET         = 2,
-    SUMMON_CATEGORY_PUPPET      = 3,
-    SUMMON_CATEGORY_VEHICLE     = 4,
-    SUMMON_CATEGORY_UNK         = 5  // as of patch 3.3.5a only Bone Spike in Icecrown Citadel
-                                     // uses this category
+    SUMMON_CATEGORY_WILD                 = 0,
+    SUMMON_CATEGORY_ALLY                 = 1,
+    SUMMON_CATEGORY_PET                  = 2,
+    SUMMON_CATEGORY_PUPPET               = 3,
+    SUMMON_CATEGORY_POSSESSED_VEHICLE    = 4,
+    SUMMON_CATEGORY_VEHICLE              = 5 // Wild, but Ride Spell will be cast
 };
 
 enum class SummonTitle : int32
