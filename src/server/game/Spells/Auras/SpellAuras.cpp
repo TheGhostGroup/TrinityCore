@@ -75,7 +75,7 @@ _flags(AFLAG_NONE), _effectsToApply(effMask), _needClientUpdate(false), _effectM
     ASSERT(GetTarget() && GetBase());
 
     // Try find slot for aura
-    uint8 slot = 0;
+    uint16 slot = 0;
     // lookup for free slots in units visibleAuras
     for (AuraApplication* visibleAura : GetTarget()->GetVisibleAuras())
     {
@@ -510,6 +510,17 @@ void Aura::_InitEffects(uint32 effMask, Unit* caster, int32 const* baseAmount)
 
     while (!_effects.back())
         _effects.pop_back();
+}
+
+bool Aura::CanPeriodicTickCrit() const
+{
+    if (GetSpellInfo()->HasAttribute(SPELL_ATTR2_CANT_CRIT))
+        return false;
+
+    if (GetSpellInfo()->HasAttribute(SPELL_ATTR8_PERIODIC_CAN_CRIT))
+        return true;
+
+    return false;
 }
 
 Aura::~Aura()

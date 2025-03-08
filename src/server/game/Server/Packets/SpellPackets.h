@@ -172,11 +172,12 @@ namespace WorldPackets
             Optional<float> TimeMod;
             std::vector<float> Points;
             std::vector<float> EstimatedPoints;
+            TaggedPosition<Position::XYZ> DstLocation;
         };
 
         struct AuraInfo
         {
-            uint8 Slot = 0;
+            uint16 Slot = 0;
             Optional<AuraDataInfo> AuraData;
         };
 
@@ -376,20 +377,20 @@ namespace WorldPackets
             SpellHealPrediction Predict;
         };
 
-        class SpellGo final : public CombatLog::CombatLogServerPacket
+        class SpellStart final : public ServerPacket
         {
         public:
-            SpellGo() : CombatLog::CombatLogServerPacket(SMSG_SPELL_GO) { }
+            SpellStart() : ServerPacket(SMSG_SPELL_START) { }
 
             WorldPacket const* Write() override;
 
             SpellCastData Cast;
         };
 
-        class SpellStart final : public ServerPacket
+        class SpellGo final : public CombatLog::CombatLogServerPacket
         {
         public:
-            SpellStart() : ServerPacket(SMSG_SPELL_START) { }
+            SpellGo() : CombatLog::CombatLogServerPacket(SMSG_SPELL_GO) { }
 
             WorldPacket const* Write() override;
 

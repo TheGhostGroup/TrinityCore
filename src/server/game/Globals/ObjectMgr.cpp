@@ -72,6 +72,7 @@
 #include "VMapManager2.h"
 #include "Vehicle.h"
 #include "World.h"
+#include "advstd.h"
 #include <G3D/g3dmath.h>
 #include <limits>
 #include <numeric>
@@ -1528,7 +1529,7 @@ void ObjectMgr::LoadEquipmentTemplates()
                 continue;
             }
 
-            if (std::ranges::none_of(InventoryTypesEquipable, [dbcItem](InventoryType inventoryType) { return inventoryType == dbcItem->InventoryType; }))
+            if (!advstd::ranges::contains(InventoryTypesEquipable, dbcItem->InventoryType))
             {
                 TC_LOG_ERROR("sql.sql", "Item (ID={}) in creature_equip_template.ItemID{} for CreatureID = {} and ID = {} is not equipable in a hand, forced to 0.",
                     equipmentInfo.Items[i].ItemId, i + 1, entry, id);
@@ -7425,14 +7426,14 @@ void ObjectMgr::SetHighestGuids()
 
     result = CharacterDatabase.Query("SELECT MAX(guid) FROM item_instance");
     if (result)
-        GetGuidSequenceGenerator(HighGuid::Item).Set((*result)[0].GetUInt64() + 1);
+        GetGenerator<HighGuid::Item>().Set((*result)[0].GetUInt64() + 1);
 
     // Cleanup other tables from nonexistent guids ( >= _hiItemGuid)
-    CharacterDatabase.PExecute("DELETE FROM character_inventory WHERE item >= '{}'", GetGuidSequenceGenerator(HighGuid::Item).GetNextAfterMaxUsed());    // One-time query
-    CharacterDatabase.PExecute("DELETE FROM mail_items WHERE item_guid >= '{}'", GetGuidSequenceGenerator(HighGuid::Item).GetNextAfterMaxUsed());        // One-time query
+    CharacterDatabase.PExecute("DELETE FROM character_inventory WHERE item >= '{}'", GetGenerator<HighGuid::Item>().GetNextAfterMaxUsed());     // One-time query
+    CharacterDatabase.PExecute("DELETE FROM mail_items WHERE item_guid >= '{}'", GetGenerator<HighGuid::Item>().GetNextAfterMaxUsed());         // One-time query
     CharacterDatabase.PExecute("DELETE a, ab, ai FROM auctionhouse a LEFT JOIN auction_bidders ab ON ab.auctionId = a.id LEFT JOIN auction_items ai ON ai.auctionId = a.id WHERE ai.itemGuid >= '{}'",
-        GetGuidSequenceGenerator(HighGuid::Item).GetNextAfterMaxUsed());       // One-time query
-    CharacterDatabase.PExecute("DELETE FROM guild_bank_item WHERE item_guid >= '{}'", GetGuidSequenceGenerator(HighGuid::Item).GetNextAfterMaxUsed());   // One-time query
+        GetGenerator<HighGuid::Item>().GetNextAfterMaxUsed());                                                                                  // One-time query
+    CharacterDatabase.PExecute("DELETE FROM guild_bank_item WHERE item_guid >= '{}'", GetGenerator<HighGuid::Item>().GetNextAfterMaxUsed());    // One-time query
 
     result = WorldDatabase.Query("SELECT MAX(guid) FROM transports");
     if (result)
@@ -9729,7 +9730,7 @@ void ObjectMgr::LoadGossipMenuItems()
             gMenuItem.GossipNpcOptionID = fields[10].GetInt32();
 
         gMenuItem.BoxCoded              = fields[11].GetBool();
-        gMenuItem.BoxMoney              = fields[12].GetUInt32();
+        gMenuItem.BoxMoney              = fields[12].GetUInt64();
         gMenuItem.BoxText               = fields[13].GetString();
         gMenuItem.BoxBroadcastTextID    = fields[14].GetUInt32();
         if (!fields[15].IsNull())
@@ -11776,13 +11777,9 @@ SpawnTrackingTemplateData const* ObjectMgr::GetSpawnTrackingData(uint32 spawnTra
 
 bool ObjectMgr::IsQuestObjectiveForSpawnTracking(uint32 spawnTrackingId, uint32 questObjectiveId) const
 {
-    auto itr = _spawnTrackingQuestObjectiveStore.find(spawnTrackingId);
-    if (itr != _spawnTrackingQuestObjectiveStore.end())
-    {
-        std::vector<QuestObjective const*> const* questObjectiveList = &itr->second;
-        if (std::ranges::find(*questObjectiveList, questObjectiveId, &QuestObjective::ID) != (*questObjectiveList).end())
-            return true;
-    }
+    if (std::vector<QuestObjective const*> const* questObjectiveList = Trinity::Containers::MapGetValuePtr(_spawnTrackingQuestObjectiveStore, spawnTrackingId))
+        return advstd::ranges::contains(*questObjectiveList, questObjectiveId, &QuestObjective::ID);
+
     return false;
 }
 

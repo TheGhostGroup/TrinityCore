@@ -485,7 +485,7 @@ bool Player::Create(ObjectGuid::LowType guidlow, WorldPackets::Character::Charac
     SetInventorySlotCount(INVENTORY_DEFAULT_SIZE);
 
     // set starting level
-    SetLevel(GetStartLevel(createInfo->Race, createInfo->Class, createInfo->TemplateSet));
+    SetLevel(GetStartLevel(createInfo->Race, createInfo->Class, createInfo->TemplateSet), false);
 
     InitRunes();
 
@@ -3402,7 +3402,7 @@ void Player::RemoveSpell(uint32 spell_id, bool disabled /*= false*/, bool learn_
             if (!learnNode->Active)
                 return false;
             return HasSpell(learnNode->SourceSpell);
-        }, &SpellLearnedBySpellMap::value_type::second);
+        }, Trinity::Containers::MapValue);
 
         if (hasOtherSpellTeachingThis)
             continue;
@@ -10966,7 +10966,7 @@ InventoryResult Player::CanEquipItem(uint8 slot, uint16 &dest, Item* pItem, bool
             {
                 // Do not allow polearm to be equipped in the offhand (rare case for the only 1h polearm 41750)
                 if (type == INVTYPE_WEAPON && pProto->GetSubClass() == ITEM_SUBCLASS_WEAPON_POLEARM)
-                    return EQUIP_ERR_2HSKILLNOTFOUND;
+                    return EQUIP_ERR_WRONG_SLOT;
                 else if (type == INVTYPE_WEAPON)
                 {
                     if (!CanDualWield())
@@ -14282,7 +14282,7 @@ void Player::OnGossipSelect(WorldObject* source, int32 gossipOptionId, uint32 me
                 PlayerInteractionType::ProfessionsCraftingOrder, PlayerInteractionType::Professions, PlayerInteractionType::ProfessionsCustomerOrder,
                 PlayerInteractionType::TraitSystem, PlayerInteractionType::BarbersChoice, PlayerInteractionType::MajorFactionRenown,
                 PlayerInteractionType::PersonalTabardVendor, PlayerInteractionType::ForgeMaster, PlayerInteractionType::CharacterBanker,
-                PlayerInteractionType::AccountBanker
+                PlayerInteractionType::AccountBanker, PlayerInteractionType::ProfessionRespec
             };
 
             PlayerInteractionType interactionType = GossipOptionNpcToInteractionType[AsUnderlyingType(gossipOptionNpc)];
@@ -17087,7 +17087,7 @@ bool Player::HasQuestForCurrency(uint32 currencyId) const
     auto hasObjectiveTypeForCurrency = [&](QuestObjectiveType type)
     {
         return std::ranges::any_of(Trinity::Containers::MapEqualRange(m_questObjectiveStatus, { type, currencyId }),
-            isCompletableObjective, &QuestObjectiveStatusMap::value_type::second);
+            isCompletableObjective, Trinity::Containers::MapValue);
     };
 
     if (hasObjectiveTypeForCurrency(QUEST_OBJECTIVE_CURRENCY))
@@ -18472,6 +18472,7 @@ bool Player::LoadFromDB(ObjectGuid guid, CharacterDatabaseQueryHolder const& hol
     GetSession()->GetCollectionMgr()->LoadMounts();
     GetSession()->GetCollectionMgr()->LoadItemAppearances();
     GetSession()->GetCollectionMgr()->LoadTransmogIllusions();
+    GetSession()->GetCollectionMgr()->LoadWarbandScenes();
 
     LearnSpecializationSpells();
 
@@ -20644,6 +20645,7 @@ void Player::SaveToDB(LoginDatabaseTransaction loginTransaction, CharacterDataba
     GetSession()->GetCollectionMgr()->SaveAccountMounts(loginTransaction);
     GetSession()->GetCollectionMgr()->SaveAccountItemAppearances(loginTransaction);
     GetSession()->GetCollectionMgr()->SaveAccountTransmogIllusions(loginTransaction);
+    GetSession()->GetCollectionMgr()->SaveAccountWarbandScenes(loginTransaction);
 
     Battlenet::RealmHandle currentRealmId = sRealmList->GetCurrentRealmId();
 
@@ -23685,16 +23687,11 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
 
     UpdateCriteria(CriteriaType::BuyItemsFromVendors, 1);
 
-    if (crItem->maxcount != 0) // bought
-    {
-        if (pProto->GetQuality() > ITEM_QUALITY_EPIC || (pProto->GetQuality() == ITEM_QUALITY_EPIC && pProto->GetBaseItemLevel() >= MinNewsItemLevel))
-            if (Guild* guild = GetGuild())
-                guild->AddGuildNews(GUILD_NEWS_ITEM_PURCHASED, GetGUID(), 0, item);
+    if (pProto->GetQuality() > ITEM_QUALITY_EPIC || (pProto->GetQuality() == ITEM_QUALITY_EPIC && pProto->GetBaseItemLevel() >= MinNewsItemLevel))
+        if (Guild* guild = GetGuild())
+            guild->AddGuildNews(GUILD_NEWS_ITEM_PURCHASED, GetGUID(), 0, item);
 
-        return true;
-    }
-
-    return false;
+    return crItem->maxcount != 0;
 }
 
 uint32 Player::GetMaxPersonalArenaRatingRequirement(uint32 minarenaslot) const
@@ -24744,6 +24741,12 @@ void Player::SendInitialPacketsBeforeAddToMap()
     SendDirectMessage(heirloomUpdate.Write());
 
     GetSession()->GetCollectionMgr()->SendFavoriteAppearances();
+
+    // SMSG_ACCOUNT_WARBAND_SCENE_UPDATE
+    WorldPackets::Misc::AccountWarbandSceneUpdate warbandSceneUpdate;
+    warbandSceneUpdate.IsFullUpdate = true;
+    warbandSceneUpdate.WarbandScenes = &GetSession()->GetCollectionMgr()->GetWarbandScenes();
+    SendDirectMessage(warbandSceneUpdate.Write());
 
     WorldPackets::Character::InitialSetup initialSetup;
     initialSetup.ServerExpansionLevel = sWorld->getIntConfig(CONFIG_EXPANSION);
@@ -29279,7 +29282,7 @@ void Player::SetPetSlot(uint32 petNumber, PetSaveMode dstPetSlot)
             Pet* oldPet = GetPet();
             if (oldPet && !oldPet->IsAlive())
             {
-                sess->SendPetStableResult(StableResult::InternalError);
+                sess->SendPetStableResult(StableResult::NoPet);
                 return;
             }
 
@@ -29307,7 +29310,7 @@ void Player::SetPetSlot(uint32 petNumber, PetSaveMode dstPetSlot)
             Pet* oldPet = GetPet();
             if (oldPet && !oldPet->IsAlive())
             {
-                sess->SendPetStableResult(StableResult::InternalError);
+                sess->SendPetStableResult(StableResult::NoPet);
                 return;
             }
 
@@ -30909,8 +30912,9 @@ void Player::ExecutePendingSpellCastRequest()
     }
 
     // Check possible spell cast overrides
-    GetCastSpellInfoContext overrideContext;
-    spellInfo = castingUnit->GetCastSpellInfo(spellInfo, triggerFlag, &overrideContext);
+    auto [overrideSpellInfo, overrideTriggerFlag] = castingUnit->GetCastSpellInfo(spellInfo);
+    spellInfo = overrideSpellInfo;
+    triggerFlag |= overrideTriggerFlag;
     if (spellInfo->IsPassive())
     {
         CancelPendingCastRequest();
