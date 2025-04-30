@@ -540,34 +540,6 @@ void Spell::EffectSchoolDMG()
         }
 
         Unit* unitCaster = GetUnitCasterForEffectHandlers();
-        switch (m_spellInfo->SpellFamilyName)
-        {
-            case SPELLFAMILY_GENERIC:
-            {
-                break;
-            }
-            case SPELLFAMILY_WARRIOR:
-            {
-                break;
-            }
-            case SPELLFAMILY_WARLOCK:
-            {
-                break;
-            }
-            case SPELLFAMILY_PRIEST:
-            {
-                break;
-            }
-            case SPELLFAMILY_DRUID:
-            {
-                break;
-            }
-            case SPELLFAMILY_DEATHKNIGHT:
-            {
-                break;
-            }
-        }
-
         if (unitCaster && apply_direct_bonus)
         {
             uint32 bonus = unitCaster->SpellDamageBonusDone(unitTarget, m_spellInfo, (uint32)damage, SPELL_DIRECT_DAMAGE, *effectInfo, 1, this);
@@ -801,7 +773,7 @@ void Spell::EffectTriggerMissileSpell()
 
 void Spell::EffectForceCast()
 {
-    if (effectHandleMode != SPELL_EFFECT_HANDLE_HIT_TARGET)
+    if (effectHandleMode != SPELL_EFFECT_HANDLE_LAUNCH_TARGET)
         return;
 
     if (!unitTarget)
@@ -836,7 +808,6 @@ void Spell::EffectForceCast()
             {
                 CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
                 args.SetOriginalCaster(m_originalCasterGUID);
-                args.SetTriggeringSpell(this);
                 args.AddSpellMod(SPELLVALUE_BASE_POINT0, damage);
                 unitTarget->CastSpell(unitTarget, spellInfo->Id, args);
                 return;
@@ -848,13 +819,11 @@ void Spell::EffectForceCast()
     {
         case 72298: // Malleable Goo Summon
             unitTarget->CastSpell(unitTarget, spellInfo->Id, CastSpellExtraArgs(TRIGGERED_FULL_MASK)
-                .SetOriginalCaster(m_originalCasterGUID)
-                .SetTriggeringSpell(this));
+                .SetOriginalCaster(m_originalCasterGUID));
             return;
     }
 
     CastSpellExtraArgs args(TRIGGERED_FULL_MASK & ~(TRIGGERED_IGNORE_POWER_COST | TRIGGERED_IGNORE_REAGENT_COST));
-    args.SetTriggeringSpell(this);
     if (effectInfo->Effect == SPELL_EFFECT_FORCE_CAST_WITH_VALUE)
         for (std::size_t i = 0; i < spellInfo->GetEffects().size(); ++i)
             args.AddSpellMod(SpellValueMod(SPELLVALUE_BASE_POINT0 + i), damage);
@@ -2951,7 +2920,7 @@ void Spell::EffectInterruptCast()
         {
             SpellInfo const* curSpellInfo = spell->m_spellInfo;
             // check if we can interrupt spell
-            if ((spell->getState() == SPELL_STATE_CASTING
+            if ((spell->getState() == SPELL_STATE_CHANNELING
                 || (spell->getState() == SPELL_STATE_PREPARING && spell->GetCastTime() > 0.0f))
                 && curSpellInfo->CanBeInterrupted(m_caster, unitTarget))
             {
@@ -4195,6 +4164,8 @@ void Spell::EffectDispelMechanic()
 
     for (auto itr = dispel_list.begin(); itr != dispel_list.end(); ++itr)
         unitTarget->RemoveAura(itr->first, itr->second, 0, AURA_REMOVE_BY_ENEMY_SPELL);
+
+    CallScriptSuccessfulDispel(SpellEffIndex(effectInfo->EffectIndex));
 
     std::ranges::find(m_UniqueTargetInfo, unitTarget->GetGUID(), &TargetInfo::TargetGUID)->ProcHitMask |= PROC_HIT_DISPEL;
 }
