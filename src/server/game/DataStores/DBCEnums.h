@@ -191,7 +191,7 @@ enum class AreaTriggerActionSetFlag : uint32
     CreatorsPartyOnly               = 0x0100,
     DontRunOnLeaveWhenExpiring      = 0x0200, /*NYI*/
     CanAffectUninteractible         = 0x0400,
-    DontDespawnWithCreator          = 0x0800, /*NYI*/
+    DontDespawnWithCreator          = 0x0800,
     CanAffectBeastmaster            = 0x1000, // Can affect GMs
     RequiresLineOfSight             = 0x2000  /*NYI*/
 };
@@ -2134,8 +2134,8 @@ enum class SpellEffectAttributes
     AreaEffectsUseTargetRadius              = 0x00020000, /*NYI*/
     TeleportWithVehicle                     = 0x00040000, /*NYI*/
     ScalePointsByChallengeModeDamageScaler  = 0x00080000, /*NYI*/
-    DontFailSpellOnTargetingFailure         = 0x00100000, /*NYI*/
-    IgnoreDuringCooldownTimeRateCalculation = 0x00800000, /*NYI*/
+    DontFailSpellOnTargetingFailure         = 0x00100000,
+    IgnoreDuringCooldownTimeRateCalculation = 0x00800000,
     DamageOnlyAbsorbShields                 = 0x04000000, /*NYI*/ // Effects with this attribute only reduce absorbs on targets hit without actually dealing damage
 };
 

@@ -34,7 +34,6 @@
 #include "RealmList.pb.h"
 #include "ScriptMgr.h"
 #include "SessionKeyGenerator.h"
-#include "SslStream.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
@@ -158,7 +157,7 @@ void WorldSocketProtocolInitializer::HandleDataReady()
 {
     try
     {
-        ByteBuffer buffer(std::move(_packetBuffer));
+        ByteBuffer buffer(std::move(_packetBuffer).Release());
         if (buffer.ReadString(ClientConnectionInitialize.length()) != ClientConnectionInitialize)
         {
             _socket->CloseSocket();
@@ -366,7 +365,7 @@ WorldSocket::ReadDataHandlerResult WorldSocket::ReadDataHandler()
         return ReadDataHandlerResult::Error;
     }
 
-    WorldPacket packet(std::move(_packetBuffer), GetConnectionType());
+    WorldPacket packet(std::move(_packetBuffer).Release(), GetConnectionType());
     OpcodeClient opcode = packet.read<OpcodeClient>();
     if (!opcodeTable.IsValid(opcode))
     {
@@ -554,7 +553,7 @@ void WorldSocket::WritePacketToBuffer(EncryptablePacket const& packet, MessageBu
     {
         CompressedWorldPacket cmp;
         cmp.UncompressedSize = packetSize + sizeof(opcode);
-        cmp.UncompressedAdler = adler32(adler32(0x9827D8F1, (Bytef*)&opcode, sizeof(opcode)), packet.contents(), packetSize);
+        cmp.UncompressedAdler = adler32(adler32(0x9827D8F1, (Bytef*)&opcode, sizeof(opcode)), packet.data(), packetSize);
 
         // Reserve space for compression info - uncompressed size and checksums
         uint8* compressionInfo = buffer.GetWritePointer();
@@ -571,7 +570,7 @@ void WorldSocket::WritePacketToBuffer(EncryptablePacket const& packet, MessageBu
         opcode = SMSG_COMPRESSED_PACKET;
     }
     else if (!packet.empty())
-        buffer.Write(packet.contents(), packet.size());
+        buffer.Write(packet.data(), packet.size());
 
     memcpy(dataPos, &opcode, sizeof(opcode));
     packetSize += sizeof(opcode);
@@ -600,7 +599,7 @@ uint32 WorldSocket::CompressPacket(uint8* buffer, WorldPacket const& packet)
         return 0;
     }
 
-    _compressionStream->next_in = (Bytef*)packet.contents();
+    _compressionStream->next_in = (Bytef*)packet.data();
     _compressionStream->avail_in = packet.size();
 
     z_res = deflate(_compressionStream, Z_SYNC_FLUSH);

@@ -2786,7 +2786,7 @@ void SpellMgr::LoadSpellInfoServerside()
             auto existingSpellBounds = _GetSpellInfo(spellId);
             if (existingSpellBounds.begin() != existingSpellBounds.end())
             {
-                TC_LOG_ERROR("sql.sql", "Serverside spell {} difficulty {} effext index {} references a regular spell loaded from file. Adding serverside effects to existing spells is not allowed.",
+                TC_LOG_ERROR("sql.sql", "Serverside spell {} difficulty {} effect index {} references a regular spell loaded from file. Adding serverside effects to existing spells is not allowed.",
                     spellId, uint32(difficulty), effect.EffectIndex);
                 continue;
             }
@@ -5002,6 +5002,37 @@ void SpellMgr::LoadSpellInfoCorrections()
     });
 
     // ENDOF THE WANDERING ISLE SPELLS
+    //
+
+    //
+    // JADE FOREST SPELLS
+    //
+
+    // Shredder Round
+    ApplySpellFix({ 130162 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->RangeEntry = sSpellRangeStore.LookupEntry(245); // Five Hundred Yards
+    });
+
+    // Cannon Explosion
+    ApplySpellFix({ 130237 }, [](SpellInfo* spellInfo)
+    {
+        ApplySpellEffectFix(spellInfo, EFFECT_1, [](SpellEffectInfo* spellEffectInfo)
+        {
+            spellEffectInfo->Effect = SPELL_EFFECT_NONE;
+        });
+    });
+
+    // Summon Gunship Turret, Left
+    // Summon Gunship Turret, Middle
+    // Summon Gunship Turret, Right
+    ApplySpellFix({ 130996, 130997, 130998 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->RangeEntry = sSpellRangeStore.LookupEntry(12); // Interact Range
+        spellInfo->AttributesEx4 &= ~SPELL_ATTR4_USE_FACING_FROM_SPELL;
+    });
+
+    // ENDOF JADE FOREST SPELLS
     //
 
     // Earthquake
