@@ -175,7 +175,7 @@ class spell_hun_aspect_of_the_fox : public SpellScript
         return !GetCaster()->HasAura(SPELL_HUNTER_ASPECT_OF_THE_FOX);
     }
 
-    static void HandleCastWhileWalking(WorldObject*& target)
+    static void HandleCastWhileWalking(SpellScript const&, WorldObject*& target)
     {
         target = nullptr;
     }
@@ -214,7 +214,7 @@ class spell_hun_aspect_of_the_turtle : public AuraScript
 // 204089 - Bullseye
 class spell_hun_bullseye : public AuraScript
 {
-    static bool CheckEffectProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    static bool CheckEffectProc(AuraScript const&, AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
     {
         return eventInfo.GetActionTarget()->HealthBelowPct(aurEff->GetAmount());
     }
@@ -537,12 +537,12 @@ class spell_hun_manhunter : public AuraScript
         return ValidateSpellInfo({ SPELL_HUNTER_GREVIOUS_INJURY });
     }
 
-    static bool CheckProc(ProcEventInfo const& eventInfo)
+    static bool CheckProc(AuraScript const&, ProcEventInfo const& eventInfo)
     {
         return eventInfo.GetProcTarget()->IsPlayer();
     }
 
-    static void HandleEffectProc(AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
+    static void HandleEffectProc(AuraScript const&, AuraEffect const* aurEff, ProcEventInfo const& eventInfo)
     {
         eventInfo.GetActor()->CastSpell(eventInfo.GetActionTarget(), SPELL_HUNTER_GREVIOUS_INJURY, CastSpellExtraArgsInit{
             .TriggerFlags = TRIGGERED_IGNORE_CAST_IN_PROGRESS | TRIGGERED_DONT_REPORT_CAST_ERROR,
@@ -690,6 +690,31 @@ class spell_hun_multi_shot : public SpellScript
     void Register() override
     {
         OnHit += SpellHitFn(spell_hun_multi_shot::HandleOnHit);
+    }
+};
+
+// 459783 - Penetrating Shots
+class spell_hun_penetrating_shots : public AuraScript
+{
+    void CalcAmount(AuraEffect const* /*aurEff*/, int32& amount, bool const& /*canBeRecalculated*/) const
+    {
+        if (AuraEffect const* amountHolder = GetEffect(EFFECT_1))
+        {
+            float critChanceDone = GetUnitOwner()->GetUnitCriticalChanceDone(BASE_ATTACK);
+            amount = CalculatePct(critChanceDone, amountHolder->GetAmount());
+        }
+    }
+
+    void UpdatePeriodic(AuraEffect const* aurEff) const
+    {
+        if (AuraEffect* bonus = GetEffect(EFFECT_0))
+            bonus->RecalculateAmount(aurEff);
+    }
+
+    void Register() override
+    {
+        DoEffectCalcAmount += AuraEffectCalcAmountFn(spell_hun_penetrating_shots::CalcAmount, EFFECT_0, SPELL_AURA_MOD_CRIT_DAMAGE_BONUS);
+        OnEffectPeriodic += AuraEffectPeriodicFn(spell_hun_penetrating_shots::UpdatePeriodic, EFFECT_1, SPELL_AURA_PERIODIC_DUMMY);
     }
 };
 
@@ -917,7 +942,7 @@ class spell_hun_scouts_instincts : public SpellScript
         return !GetCaster()->HasAura(SPELL_HUNTER_SCOUTS_INSTINCTS);
     }
 
-    static void HandleMinSpeed(WorldObject*& target)
+    static void HandleMinSpeed(SpellScript const&, WorldObject*& target)
     {
         target = nullptr;
     }
@@ -1270,6 +1295,7 @@ void AddSC_hunter_spell_scripts()
     RegisterSpellScript(spell_hun_misdirection);
     RegisterSpellScript(spell_hun_misdirection_proc);
     RegisterSpellScript(spell_hun_multi_shot);
+    RegisterSpellScript(spell_hun_penetrating_shots);
     RegisterSpellScript(spell_hun_pet_heart_of_the_phoenix);
     RegisterSpellScript(spell_hun_posthaste);
     RegisterSpellScript(spell_hun_precise_shots);
