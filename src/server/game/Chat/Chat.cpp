@@ -149,9 +149,18 @@ void ChatHandler::SendSysMessage(uint32 entry)
     SendSysMessage(GetTrinityString(entry));
 }
 
-std::string ChatHandler::StringVPrintf(std::string_view messageFormat, fmt::printf_args messageFormatArgs)
+void ChatHandler::SendSysMessage(std::string_view messageFormat, fmt::printf_args messageFormatArgs) noexcept
+{
+    SendSysMessage(StringVPrintf(messageFormat, messageFormatArgs));
+}
+
+std::string ChatHandler::StringVPrintf(std::string_view messageFormat, fmt::printf_args messageFormatArgs) noexcept try
 {
     return fmt::vsprintf<char>(messageFormat, messageFormatArgs);
+}
+catch (std::exception const& formatError)
+{
+    return fmt::format(R"(An error occurred formatting string "{}" : {})", messageFormat, formatError.what());
 }
 
 bool ChatHandler::_ParseCommands(std::string_view text)
@@ -444,9 +453,6 @@ ObjectGuid::LowType ChatHandler::extractLowGuidFromLink(char* text, HighGuid& gu
                 return player->GetGUID().GetCounter();
 
             ObjectGuid guid = sCharacterCache->GetCharacterGuidByName(name);
-            if (guid.IsEmpty())
-                return 0;
-
             return guid.GetCounter();
         }
         case GUID_LINK_CREATURE:

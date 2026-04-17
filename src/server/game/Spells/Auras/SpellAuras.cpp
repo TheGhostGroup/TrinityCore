@@ -19,6 +19,7 @@
 #include "CellImpl.h"
 #include "Common.h"
 #include "Containers.h"
+#include "CreatureAI.h"
 #include "DynamicObject.h"
 #include "GridNotifiersImpl.h"
 #include "Item.h"
@@ -262,6 +263,9 @@ void AuraApplication::BuildUpdatePacket(WorldPackets::Spells::AuraInfo& auraInfo
         auraData.CastUnit = ObjectGuid::Empty; // optional data is filled in, but cast unit contains empty guid in packet
     else if (!(auraData.Flags & AFLAG_NOCASTER))
         auraData.CastUnit = aura->GetCasterGUID();
+
+    if (!aura->GetCastItemGUID().IsEmpty())
+        auraData.CastItem = aura->GetCastItemGUID();
 
     if (auraData.Flags & AFLAG_DURATION)
     {
@@ -507,7 +511,7 @@ AuraScript* Aura::GetScriptByType(std::type_info const& type) const
     return nullptr;
 }
 
-void Aura::_InitEffects(uint32 effMask, Unit* caster, int32 const* baseAmount)
+void Aura::_InitEffects(uint32 effMask, Unit* caster, SpellEffectValue const* baseAmount)
 {
     // shouldn't be in constructor - functions in AuraEffect::AuraEffect use polymorphism
     _effects.resize(GetSpellInfo()->GetEffects().size());
@@ -680,7 +684,7 @@ void Aura::UpdateTargetMap(Unit* caster, bool apply)
         {
             // needs readding - remove now, will be applied in next update cycle
             // (dbcs do not have auras which apply on same type of targets but have different radius, so this is not really needed)
-            if (itr->first->IsImmunedToSpell(GetSpellInfo(), caster, true) || !CanBeAppliedOn(itr->first))
+            if (itr->first->IsImmunedToSpell(GetSpellInfo(), itr->second, caster, true) || !CanBeAppliedOn(itr->first))
             {
                 targetsToRemove.push_back(applicationPair.second->GetTarget());
                 continue;
@@ -713,7 +717,7 @@ void Aura::UpdateTargetMap(Unit* caster, bool apply)
                 if (itr->first->IsImmunedToSpellEffect(GetSpellInfo(), spellEffectInfo, caster))
                     itr->second &= ~(1 << spellEffectInfo.EffectIndex);
 
-            if (!itr->second || itr->first->IsImmunedToSpell(GetSpellInfo(), caster) || !CanBeAppliedOn(itr->first))
+            if (!itr->second || itr->first->IsImmunedToSpell(GetSpellInfo(), itr->second, caster) || !CanBeAppliedOn(itr->first))
                 addUnit = false;
         }
 
@@ -1269,7 +1273,7 @@ AuraKey Aura::GenerateKey(uint32& recalculateMask) const
     return key;
 }
 
-void Aura::SetLoadedState(int32 maxDuration, int32 duration, int32 charges, uint32 recalculateMask, int32* amount)
+void Aura::SetLoadedState(int32 maxDuration, int32 duration, int32 charges, uint32 recalculateMask, SpellEffectValue const* amount)
 {
     m_maxDuration = maxDuration;
     m_duration = duration;
@@ -1537,7 +1541,7 @@ void Aura::HandleAuraSpecificMods(AuraApplication const* aurApp, Unit* caster, b
                         // effect on caster
                         if (AuraEffect const* aurEff = aura->GetEffect(0))
                         {
-                            float multiplier = float(aurEff->GetAmount());
+                            SpellEffectValue multiplier = aurEff->GetAmount();
                             CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
                             args.SetOriginalCastId(GetCastId());
                             args.AddSpellMod(SPELLVALUE_BASE_POINT0, CalculatePct(caster->GetMaxPower(POWER_MANA), multiplier));
@@ -1592,6 +1596,19 @@ void Aura::HandleAuraSpecificMods(AuraApplication const* aurApp, Unit* caster, b
                     break;
             }
             break;
+    }
+
+    if (apply)
+    {
+        if (Creature* creature = target->ToCreature())
+            if (CreatureAI* ai = creature->AI())
+                ai->OnAuraApplied(aurApp);
+    }
+    else
+    {
+        if (Creature* creature = target->ToCreature())
+            if (CreatureAI* ai = creature->AI())
+                ai->OnAuraRemoved(aurApp);
     }
 }
 
@@ -1959,7 +1976,7 @@ uint32 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo
         if (!target->IsStandState())
             return 0;
 
-    bool success = roll_chance_f(CalcProcChance(*procEntry, eventInfo));
+    bool success = roll_chance(CalcProcChance(*procEntry, eventInfo));
 
     const_cast<Aura*>(this)->SetLastProcAttemptTime(now);
 
@@ -2029,8 +2046,8 @@ float Aura::CalcPPMProcChance(Unit* actor) const
     float averageProcInterval = 60.0f / ppm;
 
     TimePoint currentTime = GameTime::Now();
-    float secondsSinceLastAttempt = std::min(duration_cast<FloatSeconds>(currentTime - m_lastProcAttemptTime).count(), 10.0f);
-    float secondsSinceLastProc = std::min(duration_cast<FloatSeconds>(currentTime - m_lastProcSuccessTime).count(), 1000.0f);
+    float secondsSinceLastAttempt = std::min(duration_cast<FloatSeconds>(currentTime - m_lastProcAttemptTime).count(), 10.0);
+    float secondsSinceLastProc = std::min(duration_cast<FloatSeconds>(currentTime - m_lastProcSuccessTime).count(), 1000.0);
 
     float chance = std::max(1.0f, 1.0f + ((secondsSinceLastProc / averageProcInterval - 1.5f) * 3.0f)) * ppm * secondsSinceLastAttempt / 60.0f;
     RoundToInterval(chance, 0.0f, 1.0f);
@@ -2200,7 +2217,7 @@ void Aura::CallScriptEffectUpdatePeriodicHandlers(AuraEffect* aurEff)
     }
 }
 
-void Aura::CallScriptEffectCalcAmountHandlers(AuraEffect const* aurEff, int32& amount, bool& canBeRecalculated)
+void Aura::CallScriptEffectCalcAmountHandlers(AuraEffect const* aurEff, SpellEffectValue& amount, bool& canBeRecalculated)
 {
     for (AuraScript* script : m_loadedScripts)
     {

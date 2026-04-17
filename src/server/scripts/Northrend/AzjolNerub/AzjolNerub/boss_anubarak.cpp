@@ -473,7 +473,7 @@ struct npc_anubarak_anub_ar_assassin : public npc_anubarak_pet_template
             do
                 jumpTo = GetRandomPositionAround(anubarak);
             while (!CreatureAI::IsInBounds(*boundary, &jumpTo));
-            me->GetMotionMaster()->MoveJump(jumpTo, 40.0f, 40.0f);
+            me->GetMotionMaster()->MoveJump(EVENT_JUMP, jumpTo, 24.0f, 20.0f, 30.0f);
             DoCastSelf(SPELL_ASSASSIN_VISUAL, true);
         }
     }
@@ -485,7 +485,7 @@ struct npc_anubarak_anub_ar_assassin : public npc_anubarak_pet_template
 
     void JustEngagedWith(Unit* /*who*/) override
     {
-        _scheduler.Schedule(6s, [this](TaskContext task)
+        _scheduler.Schedule(6s, [this](TaskContext& task)
         {
             if (me->GetVictim() && me->GetVictim()->isInBack(me))
                 DoCastVictim(SPELL_BACKSTAB);
@@ -526,7 +526,7 @@ struct npc_anubarak_anub_ar_guardian : public npc_anubarak_pet_template
 
     void JustEngagedWith(Unit* /*who*/) override
     {
-        _scheduler.Schedule(6s, [this](TaskContext task)
+        _scheduler.Schedule(6s, [this](TaskContext& task)
         {
             DoCastVictim(SPELL_SUNDER_ARMOR);
             task.Repeat(12s);
@@ -556,7 +556,7 @@ struct npc_anubarak_anub_ar_venomancer : public npc_anubarak_pet_template
 
     void JustEngagedWith(Unit* /*who*/) override
     {
-        _scheduler.Schedule(5s, [this](TaskContext task)
+        _scheduler.Schedule(5s, [this](TaskContext& task)
         {
             DoCastVictim(SPELL_POISON_BOLT);
             task.Repeat(2s, 3s);

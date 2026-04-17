@@ -234,7 +234,7 @@ class spell_waycrest_manor_wildfire : public AuraScript
     void HandlePeriodic(AuraEffect const* aurEff)
     {
         if (aurEff->GetTickNumber() % 6 == 0)
-            GetTarget()->CastSpell(roll_chance_i(50) ? GetRandomPositionInCircle() : GetRandomPositionInRectangle(), SPELL_WILDFIRE_MISSILE, TRIGGERED_FULL_MASK);
+            GetTarget()->CastSpell(roll_chance(50) ? GetRandomPositionInCircle() : GetRandomPositionInRectangle(), SPELL_WILDFIRE_MISSILE, TRIGGERED_FULL_MASK);
     }
 
     void Register() override
@@ -286,7 +286,7 @@ struct at_waycrest_manor_organ_missiles : AreaTriggerAI
 
     void OnCreate(Spell const* /*creatingSpell*/) override
     {
-        _scheduler.Schedule(100ms, 300ms, [this](TaskContext task)
+        _scheduler.Schedule(100ms, 300ms, [this](TaskContext& task)
         {
             if (Unit* caster = at->GetCaster())
                 caster->CastSpell(at->GetPosition(), SPELL_ORGAN_MISSILES, TRIGGERED_IGNORE_CAST_IN_PROGRESS);
